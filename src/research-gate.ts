@@ -27,6 +27,10 @@ export function deepResearchGateIssues(d: Dossier): string[] {
   const cv = d.competitive;
   const ai = cv.aiVisibility;
 
+  if (!filled(cv.primaryCountry) || !filled(cv.semrushDatabase)) {
+    issues.push("missing primary-country SEMrush context: primaryCountry and semrushDatabase are required");
+  }
+
   const hasSemrushMetrics =
     filled(cv.authorityScore) ||
     filled(cv.organicTraffic) ||

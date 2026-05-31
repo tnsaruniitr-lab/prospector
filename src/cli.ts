@@ -76,7 +76,7 @@ Commands:
             LinkedIn browser complete. Use --allow-quick only for debugging.
 
   dossier-csv --input enriched.csv [--output prospect-dossier.csv] [--limit N]
-            Convert a quick enriched CSV into the 70-column dossier contract.
+            Convert a quick enriched CSV into the 80+ column dossier contract.
             Rows are marked partial until the browser SEMrush/LinkedIn pass is complete.
 
   db-export

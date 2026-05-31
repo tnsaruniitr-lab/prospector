@@ -42,6 +42,7 @@ const d: Dossier = {
     hasChatWidget: true, hasWhatsAppBot: false, hasWhatsApp: true,
   },
   competitive: {
+    primaryCountry: "United Arab Emirates", semrushDatabase: "ae",
     authorityScore: 7, organicTraffic: "13/mo", trafficTrend: "+1,200% (off a tiny base)",
     organicKeywords: "2", backlinks: "3K", refDomains: "33",
     aiVisibility: { mentions: 2, citedPages: 5, chatgpt: "2", gemini: "0", aiOverview: "0", aiMode: "0" },

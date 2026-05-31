@@ -15,8 +15,9 @@ const LEADER = { domain: "zuriplasticsurgery.com", mentions: 235, citedPages: 25
 
 // Gold-standard enrichment (live SEMrush): per-engine AI mentions (sum = total),
 // organic-traffic trend, and top organic competitors. Competitors only where the
-// SEMrush DB returned real aesthetic/surgery domains (the account defaults to the
-// .de database, so US competitor data is unreliable for the rest — left empty).
+// SEMrush DB returned real aesthetic/surgery domains. Always use the primary
+// country database for the brand (Miami = db=us); blank competitors mean the
+// browser pass did not surface a reliable local set, not that we used worldwide.
 const AI_SPLIT: Record<string, { chatgpt: string; aiOverview: string; aiMode: string; gemini: string; trend: string; competitors?: { domain: string; commonLevel: string; keywords: number }[] }> = {
   "zuriplasticsurgery.com": { chatgpt: "44", aiOverview: "123", aiMode: "56", gemini: "12", trend: "-12%", competitors: [{ domain: "prosculpt.com", commonLevel: "24%", keywords: 2 }, { domain: "pscatlanta.com", commonLevel: "24%", keywords: 2 }, { domain: "sanchezplasticsurgery.com", commonLevel: "16%", keywords: 1 }] },
   "arvivaesthetics.com": { chatgpt: "25", aiOverview: "99", aiMode: "70", gemini: "9", trend: "+20%", competitors: [{ domain: "diehlplastics.com", commonLevel: "11%", keywords: 2 }, { domain: "vspotmedispa.com", commonLevel: "11%", keywords: 1 }] },
@@ -128,6 +129,7 @@ async function build(r: R): Promise<Dossier> {
       images: r.images, imagesNoAlt: r.imagesNoAlt, hasChatWidget: !!r.hasChatWidget, hasWhatsApp: !!r.hasWhatsApp,
     },
     competitive: {
+      primaryCountry: "United States", semrushDatabase: "us",
       authorityScore: r.authorityScore, organicTraffic: r.organicTraffic, trafficTrend: ai.trend,
       organicKeywords: r.organicKeywords, backlinks: r.backlinks, refDomains: r.refDomains,
       aiVisibility: {

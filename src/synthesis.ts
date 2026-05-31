@@ -15,6 +15,7 @@ export interface DiagnosisInput {
   name: string;
   category?: string;
   geo?: string;
+  vertical?: string; // playbook id (med_spa, marketing_agency, …) → tunes the wording + schema expectations
   starAsset?: string | null;
   // AEO / schema
   hasLocalBusiness: boolean;
@@ -49,13 +50,60 @@ interface Rule {
   fix: (i: DiagnosisInput) => string;
 }
 
+// Vertical profiles tune the schema/role/FAQ wording so the SAME rule engine reads
+// correctly per industry. med_spa is the default and is byte-identical to the
+// original wording (no regression for existing dossiers).
+interface VerticalProfile {
+  schemaTypes: string;      // the identifying schema for "no LocalBusiness" rule
+  schemaFix: string;
+  leadRole: string;         // default "star asset" noun for the Person rule
+  authorityContext: string; // the query type where author authority matters
+  personFix: string;
+  faqTopics: string;        // example FAQ content topics
+  titleExample: string;
+}
+const VERTICALS: Record<string, VerticalProfile> = {
+  med_spa: {
+    schemaTypes: "LocalBusiness/MedicalBusiness",
+    schemaFix: "Add LocalBusiness/MedicalClinic schema (name, geo, services, hours) so AI can identify and place the business.",
+    leadRole: "The lead practitioner",
+    authorityContext: "on YMYL queries",
+    personFix: "Add credentialed Person schema (hasCredential, alumniOf, awards) for the lead doctor/owner.",
+    faqTopics: "cost, safety, procedure questions",
+    titleExample: "Med Spa Miami | Botox & Fillers | Brand",
+  },
+  marketing_agency: {
+    schemaTypes: "Organization/ProfessionalService",
+    schemaFix: "Add Organization + ProfessionalService schema (name, services, areaServed, sameAs) so AI can identify what the agency does and who it serves.",
+    leadRole: "The founder/principal",
+    authorityContext: "on “best agency” shortlist queries",
+    personFix: "Add Person schema for the founder/principals (jobTitle, bio, sameAs → LinkedIn) so AI can attribute the team's expertise and case studies.",
+    faqTopics: "pricing, process, results, and case-study questions",
+    titleExample: "B2B SEO Agency Berlin | Lead Generation | Brand",
+  },
+};
+const vof = (i: DiagnosisInput): VerticalProfile => VERTICALS[i.vertical ?? "med_spa"] ?? VERTICALS.med_spa;
+
+// Vertical-aware "does the site carry business-identifying schema?" — agencies use
+// Organization/ProfessionalService; clinics use LocalBusiness/Medical*. Derive
+// hasLocalBusiness from the audit's raw schemaTypes per vertical (audit.js stays
+// clinic-tuned so med-spa detection doesn't regress).
+const SCHEMA_RX: Record<string, RegExp> = {
+  med_spa: /LocalBusiness|MedicalBusiness|MedicalClinic|HealthAndBeauty|Dentist|Physician/i,
+  marketing_agency: /Organization|ProfessionalService|LocalBusiness|Corporation|Agency/i,
+};
+export function hasBusinessSchema(schemaTypes: string[] | undefined, vertical = "med_spa"): boolean {
+  const rx = SCHEMA_RX[vertical] ?? SCHEMA_RX.med_spa;
+  return rx.test((schemaTypes ?? []).join(" "));
+}
+
 const RULES: Rule[] = [
   // ── AEO / schema ─────────────────────────────────────────────────────────
   {
     when: (i) => !i.hasLocalBusiness,
     weight: 100,
-    problem: (i) => ({ text: `AI can't identify the business — no LocalBusiness/MedicalBusiness schema, so ChatGPT & Gemini can't confidently say what or where ${i.name} is.`, evidence: "hard" }),
-    fix: () => "Add LocalBusiness/MedicalClinic schema (name, geo, services, hours) so AI can identify and place the business.",
+    problem: (i) => ({ text: `AI can't identify the business — no ${vof(i).schemaTypes} schema, so ChatGPT & Gemini can't confidently say what or where ${i.name} is.`, evidence: "hard" }),
+    fix: (i) => vof(i).schemaFix,
   },
   // ── SEO: page actively blocked from indexing — most severe (invisible everywhere) ──
   {
@@ -67,8 +115,8 @@ const RULES: Rule[] = [
   {
     when: (i) => !i.hasPerson,
     weight: 90,
-    problem: (i) => ({ text: `${i.starAsset ?? "The lead practitioner"} is invisible to AI — no Person/credential schema, so on YMYL queries AI can't attribute their authority and favours competitors with better markup.`, evidence: "hard" }),
-    fix: () => "Add credentialed Person schema (hasCredential, alumniOf, awards) for the lead doctor/owner.",
+    problem: (i) => ({ text: `${i.starAsset ?? vof(i).leadRole} is invisible to AI — no Person/credential schema, so ${vof(i).authorityContext} AI can't attribute their authority and favours competitors with better markup.`, evidence: "hard" }),
+    fix: (i) => vof(i).personFix,
   },
   {
     when: (i) => !i.hasFAQ || (i.renderedWords != null && i.renderedWords < 800),
@@ -77,7 +125,7 @@ const RULES: Rule[] = [
       const cited = i.citedPages != null ? ` ${i.name} has ${i.citedPages} AI-cited pages${i.categoryLeader?.citedPages ? ` vs the leader's ${i.categoryLeader.citedPages}` : ""}.` : "";
       return { text: `Nothing to cite — no FAQ schema${i.renderedWords != null ? ` and only ${i.renderedWords} words` : ""}.${cited} AI quotes pages that answer questions.`, evidence: i.citedPages != null ? "measured" : "hard" };
     },
-    fix: () => "Build an FAQ/answer hub (cost, safety, procedure questions) with FAQPage schema to win AI-answer citations.",
+    fix: (i) => `Build an FAQ/answer hub (${vof(i).faqTopics}) with FAQPage schema to win AI-answer citations.`,
   },
   {
     when: (i) => typeof i.authorityScore === "number" && i.authorityScore >= 25 && i.aiMentions != null && i.aiMentions < 30,
@@ -109,7 +157,7 @@ const RULES: Rule[] = [
     when: (i) => i.titleLen != null && (i.titleLen === 0 || i.titleLen > 60 || i.titleLen < 15),
     weight: 45,
     problem: (i) => ({ text: i.titleLen === 0 ? `Missing <title> tag — the single biggest on-page ranking element is absent.` : i.titleLen! > 60 ? `Title tag is ${i.titleLen} chars (>60) — Google truncates it in results, weakening the click signal.` : `Title tag is only ${i.titleLen} chars — too thin to carry keywords + geo.`, evidence: "measured" }),
-    fix: () => `Write a 50–60 char title: primary service + city + brand (e.g. "Med Spa Miami | Botox & Fillers | Brand").`,
+    fix: (i) => `Write a 50–60 char title: primary service + city + brand (e.g. "${vof(i).titleExample}").`,
   },
   {
     when: (i) => i.metaDescLen != null && (i.metaDescLen === 0 || i.metaDescLen > 165),

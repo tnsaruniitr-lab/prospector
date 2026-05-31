@@ -57,16 +57,22 @@ title, metaDescLen.
 
 ## Stage 2 — SEMrush competitive + AI visibility  (browser — be logged into SEMrush)
 **Required at full depth — do not skip the per-engine AI split or the competitors page.**
-1. `navigate` to `https://www.semrush.com/analytics/overview/?q={domain}&searchType=domain`.
+0. Determine the prospect's **primary country** from the business market (city/country,
+   service area, or site country). Pick the country database (`us`, `de`, `ae`, `sa`,
+   `tr`, etc.) and record both `competitive.primaryCountry` and
+   `competitive.semrushDatabase`. Do not use Worldwide/default if primary-country data
+   exists.
+1. `navigate` to `https://www.semrush.com/analytics/overview/?db={database}&q={domain}&searchType=domain`.
 2. Inject `src/browser/semrush-extract.js` (it self-waits for the SPA). One read returns
    the whole overview, including the **full AI Visibility split which lives on this page**:
    - **SEO:** `authority` (→ authorityScore) · organicTraffic (+ organicTrafficTrend %) · organicKeywords · backlinks · refDomains
-   - **AI Visibility:** aiMentions · aiCitedPages · **aiChatgpt · aiOverview · aiMode · aiGemini** (per-engine mentions; they sum to aiMentions — a built-in sanity check).
-3. `navigate` to `https://www.semrush.com/analytics/organic/competitors/?q={domain}&searchType=domain`;
+   - **AI Visibility:** aiVisibilityScore · aiMentions · aiCitedPages · **aiChatgpt · aiOverview · aiMode · aiGemini** (per-engine mentions; they sum to aiMentions — a built-in sanity check).
+3. `navigate` to `https://www.semrush.com/analytics/organic/competitors/?db={database}&q={domain}&searchType=domain`;
    inject `src/browser/semrush-competitors.js` → top 5 organic competitors (domain · Com.Level % · # keywords) → `competitive.competitors`.
 4. **Category AI leader:** run step 1–2 for the top 2–3 competitor domains; record the one with
-   the highest AI **aiMentions** as `competitive.categoryAiLeader { domain, mentions, citedPages }`
-   (this powers the comparative hook — "highest AI visibility in your category belongs to X").
+   the highest `aiVisibilityScore` (fallback: `aiMentions`) as
+   `competitive.categoryAiLeader { domain, visibility, mentions, citedPages, aiChatgpt, aiOverview, aiMode, aiGemini }`.
+   This powers the comparative hook and the CSV columns for strongest competitor + 1-2 comparisons.
 5. **Validate:** every number must come from a labelled value on the page; if the per-engine
    split doesn't sum to aiMentions, re-read. If the overview shows "no data"/blank, set
    `competitive.thin = true` and note it — never guess.
@@ -90,9 +96,13 @@ title, metaDescLen.
    a LinkedIn URL; never mark an unverified email as confirmed.
 
 ## Stage 4 — Synthesis  (code, deterministic — do NOT hand-write)
-Call `synthesizeDiagnosis()` (`src/synthesis.ts`) with the Stage-1/2 signals. Pass the
-SEO-hygiene signals too (`titleLen, metaDescLen, h1Count, noindex, hasCanonical, hasViewport`)
-so the SEO rules fire, not just schema/AEO. Returns:
+Call `synthesizeDiagnosis()` (`src/synthesis.ts`) with the Stage-1/2 signals. **Pass
+`vertical`** (the playbook id: `med_spa`, `marketing_agency`, …) so the schema/role/FAQ
+wording matches the industry (agency → Organization/ProfessionalService + founder/principal,
+not MedicalBusiness/doctor). Derive `hasLocalBusiness` per vertical with
+`hasBusinessSchema(schemaTypes, vertical)`. Pass the SEO-hygiene signals too
+(`titleLen, metaDescLen, h1Count, noindex, hasCanonical, hasViewport`) so the SEO rules
+fire, not just schema/AEO. Returns:
 - `problems`/`fixes` — top-3 (the pitch), each badged hard / measured / comparative
 - `weakPoints` — the FULL ranked AEO+SEO issue list (nothing detected is dropped)
 - `hook` — the narrative opener

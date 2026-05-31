@@ -104,6 +104,26 @@ export const PLAYBOOKS: Record<string, Playbook> = {
     opener: ({ name, city, topIssue }) =>
       `Hi — ${name} looks like a strong clinic locally, but the site is leaving search/AI visibility on the table: ${topIssue}. For patients asking "best physio/chiro near me in ${city}", those details matter. I made a short audit with the top fixes. Want me to send it?`,
   },
+
+  marketing_agency: {
+    id: "marketing_agency",
+    label: "Marketing agencies",
+    searchSeeds: ["marketing agency", "digital marketing agency", "advertising agency"],
+    qualify: { minReviews: 5, maxReviews: 500, minPain: 20 },
+    channelPriority: ["linkedin", "email", "instagram", "phone"],
+    ownerSources: [
+      "agency leadership/team page",
+      "LinkedIn company People page",
+      "agency website footer / contact page",
+      "Apollo",
+    ],
+    contactTitles: [
+      "founder", "co-founder", "owner", "ceo", "president", "managing partner",
+      "partner", "principal", "growth director", "marketing director",
+    ],
+    opener: ({ name, city, topIssue }) =>
+      `Quick thought for ${name}: agencies in ${city} sell visibility, so the strongest hook is showing where your own site is under-cited in AI/search — ${topIssue}. I mapped the fixes and competitor benchmark. Worth sending?`,
+  },
 };
 
 export function getPlaybook(id: string): Playbook {

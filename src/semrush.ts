@@ -52,6 +52,24 @@ export interface SemrushEnrichment {
   errors: string[];
 }
 
+export function semrushDomainOverviewUrl(domain: string, country = "", city = ""): string {
+  const database = inferSemrushDatabase(country, city);
+  const url = new URL("https://www.semrush.com/analytics/overview/");
+  url.searchParams.set("db", database);
+  url.searchParams.set("q", domain);
+  url.searchParams.set("searchType", "domain");
+  return url.toString();
+}
+
+export function semrushOrganicCompetitorsUrl(domain: string, country = "", city = ""): string {
+  const database = inferSemrushDatabase(country, city);
+  const url = new URL("https://www.semrush.com/analytics/organic/competitors/");
+  url.searchParams.set("db", database);
+  url.searchParams.set("q", domain);
+  url.searchParams.set("searchType", "domain");
+  return url.toString();
+}
+
 type CsvRow = Record<string, string>;
 
 const SEO_ENDPOINT = "https://api.semrush.com/";
@@ -164,9 +182,19 @@ export function inferSemrushDatabase(country: string, city: string): string {
   if (config.SEMRUSH_DATABASE) return config.SEMRUSH_DATABASE;
   const c = country.trim().toLowerCase();
   const local = city.trim().toLowerCase();
-  if (c && COUNTRY_DATABASE[c]) return COUNTRY_DATABASE[c];
+  const countryParts = [c, ...c.split(/[,/|()\-]+/).map((p) => p.trim()).filter(Boolean)];
+  for (const part of countryParts) {
+    if (COUNTRY_DATABASE[part]) return COUNTRY_DATABASE[part];
+  }
+  const combined = `${c} ${local}`.trim();
+  for (const [key, db] of Object.entries(COUNTRY_DATABASE)) {
+    if (key.length > 3 && combined.includes(key)) return db;
+  }
   for (const [key, db] of Object.entries(CITY_DATABASE)) {
     if (local.includes(key)) return db;
+  }
+  for (const [key, db] of Object.entries(CITY_DATABASE)) {
+    if (combined.includes(key)) return db;
   }
   return "us";
 }

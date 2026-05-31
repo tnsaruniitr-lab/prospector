@@ -1,5 +1,5 @@
 // Run on a SEMrush Organic Competitors page
-// (https://www.semrush.com/analytics/organic/competitors/?q=DOMAIN&searchType=domain).
+// (https://www.semrush.com/analytics/organic/competitors/?db=COUNTRY_DB&q=DOMAIN&searchType=domain).
 // The competitors grid is virtualized (not a real <table>), so parse the visible text:
 // after the "Domain  Com. Level  Common Keywords  …" header each row reads
 // "<domain> <com.level>% <common kw> <SE kw> …". Returns the top 5 organic competitors.

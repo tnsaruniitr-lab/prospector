@@ -7,7 +7,11 @@ import { botCheck } from "./botcheck.js";
 import { extractSiteContacts, normalizeWebsite } from "./contact-extract.js";
 import { getPlaybook } from "./playbooks.js";
 import { scoreBusiness } from "./scoring.js";
-import { enrichSemrush } from "./semrush.js";
+import {
+  enrichSemrush,
+  semrushDomainOverviewUrl as buildSemrushDomainOverviewUrl,
+  semrushOrganicCompetitorsUrl as buildSemrushOrganicCompetitorsUrl,
+} from "./semrush.js";
 import type { AuditResult, ExtractedContact, Playbook } from "./types.js";
 
 interface CsvRunOpts {
@@ -77,6 +81,7 @@ const OUTPUT_HEADERS = [
   "has_whatsapp_bot",
   "semrush_database",
   "semrush_domain_overview_url",
+  "semrush_organic_competitors_url",
   "semrush_organic_traffic",
   "semrush_organic_keywords",
   "semrush_organic_cost",
@@ -204,10 +209,6 @@ function domainFromWebsite(website: string) {
   } catch {
     return null;
   }
-}
-
-function semrushDomainOverviewUrl(domain: string | null) {
-  return domain ? `https://www.semrush.com/analytics/overview/?q=${encodeURIComponent(domain)}&searchType=domain` : "";
 }
 
 function topIssues(audit: AuditResult, fallback: string) {
@@ -417,7 +418,8 @@ export async function runLocalCsv(opts: CsvRunOpts) {
       has_chatbot: bot.hasChatbot ? "Y" : "N",
       has_whatsapp_bot: bot.hasWhatsAppBot ? "Y" : "N",
       semrush_database: semrush?.database ?? "",
-      semrush_domain_overview_url: semrushDomainOverviewUrl(domain),
+      semrush_domain_overview_url: domain ? buildSemrushDomainOverviewUrl(domain, src.country, src.city) : "",
+      semrush_organic_competitors_url: domain ? buildSemrushOrganicCompetitorsUrl(domain, src.country, src.city) : "",
       semrush_organic_traffic: semrush?.overview?.organicTraffic?.toString() ?? "",
       semrush_organic_keywords: semrush?.overview?.organicKeywords?.toString() ?? "",
       semrush_organic_cost: semrush?.overview?.organicCost?.toString() ?? "",

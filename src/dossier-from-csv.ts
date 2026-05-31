@@ -2,7 +2,8 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { normalizeWebsite } from "./contact-extract.js";
-import { dossierToCsv, type Dossier, type DossierContact } from "./dossier.js";
+import { dossierToCsv, type AiCompetitorComparison, type Dossier, type DossierContact } from "./dossier.js";
+import { inferSemrushDatabase } from "./semrush.js";
 import { synthesizeDiagnosis } from "./synthesis.js";
 
 type Row = Record<string, string>;
@@ -122,6 +123,37 @@ function parseCompetitors(value: string) {
     });
 }
 
+function countryFromGeo(geo: string, city: string) {
+  if (!geo) return "";
+  const parts = geo.split(",").map((p) => p.trim()).filter(Boolean);
+  if (!parts.length) return "";
+  const last = parts.at(-1) ?? "";
+  if (last && last.toLowerCase() !== city.toLowerCase()) return last;
+  return "";
+}
+
+function cleanSemrushDb(raw: string) {
+  return /^[a-z]{2}$/i.test(raw) ? raw.toLowerCase() : "";
+}
+
+function aiCompetitorFromRow(row: Row, domainKeys: string[], prefixes: string | string[]): AiCompetitorComparison | null {
+  const domain = pick(row, ...domainKeys);
+  if (!domain) return null;
+  const ps = Array.isArray(prefixes) ? prefixes : [prefixes];
+  const prefixed = (...suffixes: string[]) => ps.flatMap((p) => suffixes.map((s) => `${p}_${s}`));
+  return {
+    domain,
+    visibility: pick(row, ...prefixed("ai_visibility", "visibility")),
+    mentions: pick(row, ...prefixed("mentions", "ai_mentions")),
+    citedPages: pick(row, ...prefixed("cited_pages", "ai_cited_pages")),
+    chatgpt: pick(row, ...prefixed("chatgpt", "ai_chatgpt")),
+    gemini: pick(row, ...prefixed("gemini", "ai_gemini")),
+    aiOverview: pick(row, ...prefixed("ai_overview", "overview")),
+    aiMode: pick(row, ...prefixed("ai_mode", "mode")),
+    note: pick(row, ...prefixed("note")),
+  };
+}
+
 function inferBooleans(issueText: string) {
   const t = issueText.toLowerCase();
   return {
@@ -139,7 +171,10 @@ function rowToDossier(row: Row): Dossier {
   const category = pick(row, "category") || "prospect";
   const city = pick(row, "city");
   const country = pick(row, "country");
-  const geo = [city, country].filter(Boolean).join(", ") || pick(row, "geo") || "unknown";
+  const geoFromRow = pick(row, "geo");
+  const geo = [city, country].filter(Boolean).join(", ") || geoFromRow || "unknown";
+  const primaryCountry = pick(row, "semrush_primary_country", "primary_country", "market_country") || country || countryFromGeo(geoFromRow, city) || countryFromGeo(geo, city) || geo;
+  const semrushDb = cleanSemrushDb(pick(row, "semrush_database")) || inferSemrushDatabase(primaryCountry, city || geo);
   const issues = pick(row, "top_issues", "top_3_ai_problems", "semrush_competitive_summary");
   const inferred = inferBooleans(issues);
   const aiMentions = num(pick(row, "semrush_ai_mentions", "ai_mentions"));
@@ -161,6 +196,9 @@ function rowToDossier(row: Row): Dossier {
 
   const founder = contactFromRow(row);
   const semrushStatus = pick(row, "semrush_browser_review_status");
+  const leader = aiCompetitorFromRow(row, ["strongest_ai_competitor", "category_ai_leader"], ["strongest_ai_competitor", "category_ai_leader"]);
+  const comp2 = aiCompetitorFromRow(row, ["ai_competitor_2"], "ai_competitor_2");
+  const aiCompetitors = [leader, comp2].filter((c): c is AiCompetitorComparison => !!c);
   const sourceNotes = [
     pick(row, "source_notes", "sources"),
     semrushStatus ? `SEMrush browser status: ${semrushStatus}` : "",
@@ -198,6 +236,8 @@ function rowToDossier(row: Row): Dossier {
       hasChatWidget: yn(pick(row, "has_chatbot")),
     },
     competitive: {
+      primaryCountry,
+      semrushDatabase: semrushDb,
       authorityScore,
       organicTraffic: pick(row, "semrush_organic_traffic", "organic_traffic"),
       trafficTrend: pick(row, "traffic_trend"),
@@ -205,6 +245,7 @@ function rowToDossier(row: Row): Dossier {
       backlinks: pick(row, "semrush_backlinks", "backlinks"),
       refDomains: pick(row, "semrush_referring_domains", "ref_domains"),
       aiVisibility: {
+        visibility: pick(row, "semrush_ai_visibility", "ai_visibility_score"),
         mentions: pick(row, "semrush_ai_mentions", "ai_mentions"),
         citedPages: pick(row, "semrush_ai_cited_pages", "ai_cited_pages"),
         chatgpt: pick(row, "semrush_chatgpt_mentions", "ai_chatgpt"),
@@ -213,6 +254,8 @@ function rowToDossier(row: Row): Dossier {
         aiMode: pick(row, "ai_mode"),
       },
       competitors: parseCompetitors(pick(row, "semrush_top_competitors", "top_competitors")),
+      aiCompetitors,
+      categoryAiLeader: leader ?? undefined,
     },
     topAiProblems: dx.problems,
     topFixes: dx.fixes,
