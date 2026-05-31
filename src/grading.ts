@@ -75,3 +75,15 @@ export function gradeDossier(d: Dossier): Grade {
     reasons,
   };
 }
+
+/**
+ * Value-only pre-grade for a DISCOVERED (not-yet-researched) candidate, so the
+ * research queue is ranked by value (reviews) — work the high-value ones first.
+ * Capped below a researched A/B; the full grade replaces it after research.
+ */
+export function gradeCandidate(reviews: number | null, rating: number | null): { score: number; tier: "Q"; reasons: string[] } {
+  const r = reviews != null ? clamp(Math.log10(reviews + 1) / Math.log10(300), 0, 1) : 0;
+  const rt = rating == null ? 0.6 : rating >= 4.5 ? 1 : rating >= 4 ? 0.85 : rating >= 3.5 ? 0.55 : 0.3;
+  const value = clamp(0.7 * r + 0.3 * rt, 0, 1);
+  return { score: Math.round(value * 55), tier: "Q", reasons: [`queued · value ${value.toFixed(2)} (${reviews ?? 0} reviews)`] };
+}
