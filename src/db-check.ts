@@ -1,18 +1,20 @@
 import { pool } from "./db.js";
 
-// Quick "what's in the DB" check.
+// "What's in the DB" — ranked by grade (priority), researched on top.
 const p = await pool.query(
-  "select name, domain, geo_city as city, lead_offer, authority_score, ai_mentions, research_status from (select *, city as geo_city from prospect.prospects) s order by name",
+  `select name,
+          research_status as status,
+          grade_tier as tier,
+          priority,
+          authority_score as auth,
+          ai_mentions as ai,
+          review_count as reviews
+   from prospect.prospects
+   order by (research_status = 'researched') desc, priority desc nulls last, review_count desc nulls last`,
 );
-console.log("\nPROSPECTS:");
+console.log("\nALL PROSPECTS (graded researched on top, then pending queue):");
 console.table(p.rows);
 
-const c = await pool.query(
-  `select pr.name as business, co.name, co.role, co.email, co.email_status, co.linkedin_url
-   from prospect.contacts co join prospect.prospects pr on pr.id = co.prospect_id
-   order by pr.name, co.confidence desc nulls last`,
-);
-console.log("CONTACTS:");
-console.table(c.rows);
-
+const c = await pool.query("select count(*)::int as n from prospect.contacts");
+console.log(`contacts: ${c.rows[0].n}\n`);
 await pool.end();

@@ -17,6 +17,12 @@ only `verified` when the profile's name AND current company match the prospect.
 ## Input
 A domain (e.g. `altaderma.com`), optionally a business name + city.
 
+## Stage 0 — Discovery  (only when given a CATEGORY + CITY, not a domain)
+Produce the candidate list, then run Stages 1–5 per prospect.
+- **Preferred (headless, reliable):** Google Places API (`src/places.ts`) → name · website · rating · review_count. Needs `GOOGLE_MAPS_API_KEY`.
+- **No-key (browser):** `navigate` to `https://www.google.com/maps/search/{category}+in+{city}`; inject `src/browser/maps-extract.js` → names + ratings + reviews (websites need a per-card click or a Google search per name).
+- Store with `recordCandidates()` (`src/record-candidates.ts`) → `pending` prospects (the research queue). Process each pending row through Stages 1–5.
+
 ## Stage 1 — On-page AEO/SEO audit  (browser)
 1. `navigate` to `https://{domain}`.
 2. Inject `src/browser/audit.js` with the javascript tool; capture the JSON.
@@ -66,6 +72,12 @@ top-3 problems (each badged hard / measured / comparative) + top-3 fixes + the h
 Assemble the `Dossier` object (identity + contacts + audit + competitive + synthesis)
 and call `recordDossier()` (`src/record-dossier.ts`) → upserts into Railway Postgres
 (deduped by domain). Run `src/db-check.ts` to confirm the row + contact count.
+
+## Stage 6 — Grade  (code)
+Run `gradeDossier()` / `src/grade-all.ts` → priority score (0-100) + tier A/B/C/D
+from **Value × Opportunity × Reachability**, stored in `priority` + `grade_tier`.
+"Who to reach out to" = `order by priority desc`. Unreachable or tiny prospects
+grade low even with a great pitch.
 
 ## Report
 Prospect persisted (id) · N verified decision-makers · lead offer · the #1 problem.
