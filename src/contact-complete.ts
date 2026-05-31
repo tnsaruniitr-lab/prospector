@@ -6,6 +6,8 @@ import type { DossierContact } from "./dossier.js";
 export function emailCandidates(fullName: string, domain: string): string[] {
   const parts = fullName
     .split(",")[0] // drop credentials after a comma ("Nicole Habib, MMS, PA-C" → "Nicole Habib")
+    .replace(/ä/gi, "ae").replace(/ö/gi, "oe").replace(/ü/gi, "ue").replace(/ß/g, "ss") // German transliteration (Büchle → Buechle)
+    .normalize("NFD").replace(/[̀-ͯ]/g, "") // strip remaining diacritics (é→e, ñ→n)
     .toLowerCase()
     .replace(/\b(dr|prof|mr|mrs|ms|maj|gen|major|general|sir|dame|md|do|dds|dmd|rn|np|pa|msn|mms|mba|bsn|facs|faad|phd|esq)\.?\b/g, " ")
     .replace(/[^a-z\s]/g, " ")
