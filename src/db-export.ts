@@ -1,7 +1,7 @@
 import { writeFileSync, mkdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-import { q, T } from "./db.js";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { q, T, pool } from "./db.js";
 import { dossierToCsv, renderDossier, type Dossier } from "./dossier.js";
 
 const outDir = resolve(dirname(fileURLToPath(import.meta.url)), "..", "outputs");
@@ -25,4 +25,10 @@ export async function dbExport(): Promise<number> {
   }
   console.log(`[db-export] ${dossiers.length} dossiers read from DB → ${csvPath}`);
   return dossiers.length;
+}
+
+// Run directly: `pnpm exec tsx src/db-export.ts`
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await dbExport();
+  await pool.end();
 }
