@@ -61,6 +61,14 @@ export function deepResearchGateIssues(d: Dossier): string[] {
     issues.push("missing LinkedIn browser pass: profile URL/evidence or explicit not-found result required");
   }
 
+  // 2nd decision-maker (DM2) must be attempted, not silently skipped: require either
+  // a second named contact, or an explicit "only the founder/owner is public" note.
+  const secondNotAvailable =
+    /only (the )?(founder|owner|one)|owner[- ]operated|solo (founder|owner|practitioner)|single (founder|owner|practitioner|contact)|no (second|2nd|other) (decision|contact|public|named)|2nd (decision-maker|contact) not|dm2 not|owner not|founder not/.test(notes);
+  if (people(d).length < 2 && !secondNotAvailable && !explicitNotPublic) {
+    issues.push("missing 2nd decision-maker: add a second named/verified contact (run the LinkedIn company People page), or an explicit 'only founder/owner public' note");
+  }
+
   return issues;
 }
 

@@ -46,6 +46,19 @@ const LINKEDIN: Record<string, { fLink?: string; fVerified?: boolean; fRole?: st
   "feeltheheal.com": { fVerified: false, fNote: "No public LinkedIn found for Daryn Herzfeld (verified absent)." },
 };
 
+// 2nd decision-maker pass — live LinkedIn *company People page* scrape (current
+// employees). `name` = a real DM2 found there; `soloNote` = checked-and-none (kept
+// honest, never assumed). The note wording satisfies the research gate's DM2 check.
+const DM2: Record<string, { name?: string; role?: string; verified?: boolean; soloNote?: string }> = {
+  "zuriplasticsurgery.com": { name: "Yalexa Leon", role: "Practice Manager", verified: true },
+  "arvivaesthetics.com": { name: "Marharyta Kuzmichova", role: "Facility Director", verified: true },
+  "avivamedicalspa.com": { name: "Daniela Romero, PA-C", role: "Board-Certified Physician Assistant (clinical lead)", verified: true },
+  "miamiskinspa.com": { name: "Joseph J. Almeida", role: "Managing Partner", verified: true },
+  "lovethenuyou.com": { soloNote: "LinkedIn company People page lists no employees — only the founder Nicole Habib is public (solo, founder-led)." },
+  "feeltheheal.com": { soloNote: "LinkedIn company People page lists no Feel The Heal staff — only the founder Daryn Herzfeld is public (solo, founder-led)." },
+  "medaestheticsmiami.com": { soloNote: "LinkedIn company People page lists only administrative staff — only the founder Rosanna Bermejo is a public decision-maker." },
+};
+
 interface R {
   candidate: string;            // name as stored at discovery (to attach the domain)
   name: string; domain: string; rating: number; reviews: number;
@@ -67,7 +80,9 @@ async function build(r: R): Promise<Dossier> {
     name: r.name, category: "med spa", geo: "Miami, FL", starAsset: r.starAsset ?? null,
     hasLocalBusiness: r.hasLocalBusiness, hasPerson: r.hasPerson, hasFAQ: r.hasFAQ, hasAggregateRating: r.hasAggregateRating,
     renderedWords: r.renderedWords, images: r.images, imagesNoAlt: r.imagesNoAlt,
+    titleLen: r.title.length, metaDescLen: r.metaDescLen, h1Count: r.h1Count,
     authorityScore: r.authorityScore, aiMentions: r.aiMentions, citedPages: r.aiCitedPages,
+    trafficTrend: AI_SPLIT[r.domain]?.trend ?? null,
     categoryLeader: r.isLeader ? null : LEADER,
   });
   // Real contact completion: derive each decision-maker's email pattern + MX-verify
@@ -89,6 +104,15 @@ async function build(r: R): Promise<Dossier> {
     if (li.dm2Verified != null) decisionMaker2.linkedinVerified = li.dm2Verified;
     if (li.dm2Role) decisionMaker2.role = li.dm2Role;
   }
+  // 2nd decision-maker from the LinkedIn company People-page pass (derive their email too).
+  const dm2src = DM2[r.domain];
+  if (!decisionMaker2 && dm2src?.name) {
+    decisionMaker2 = await completeContact(
+      { name: dm2src.name, role: dm2src.role ?? "Decision-maker", linkedinVerified: dm2src.verified ?? false, source: "LinkedIn company People page (current employee)" },
+      ctx,
+    );
+  }
+  const notes = r.notes + (dm2src?.soloNote ? " · " + dm2src.soloNote : "");
   return {
     name: r.name, domain: r.domain, category: "med spa", geo: "Miami, FL",
     positioning: r.positioning, usp: r.usp, services: r.services,
@@ -113,8 +137,8 @@ async function build(r: R): Promise<Dossier> {
       competitors: ai.competitors ?? [],
       ...(r.isLeader ? {} : { categoryAiLeader: { domain: LEADER.domain, mentions: LEADER.mentions, citedPages: LEADER.citedPages, note: "highest AI visibility in the Miami set" } }),
     },
-    topAiProblems: dx.problems, topFixes: dx.fixes, hook: dx.hook,
-    leadOffer: "aeo", pitch: r.pitch, outreachStatus: "new", notes: r.notes,
+    topAiProblems: dx.problems, topFixes: dx.fixes, hook: dx.hook, weakPoints: dx.weakPoints,
+    leadOffer: "aeo", pitch: r.pitch, outreachStatus: "new", notes,
     researchedNote: "Live Miami med-spa batch: browser-Maps discovery + rendered on-page audit + SEMrush overview + web search for decision-makers.",
   };
 }
