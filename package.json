@@ -13,6 +13,10 @@
     "worklist": "tsx src/cli.ts worklist",
     "pipeline": "tsx src/cli.ts pipeline",
     "csv": "tsx src/cli.ts csv",
+    "dossier:csv": "tsx src/cli.ts dossier-csv",
+    "db:export": "tsx src/cli.ts db-export",
+    "db:flow": "tsx src/db-flow.ts",
+    "grade": "tsx src/grade-all.ts",
     "playbooks": "tsx src/cli.ts playbooks",
     "dev": "tsx watch src/cli.ts",
     "build": "tsc"

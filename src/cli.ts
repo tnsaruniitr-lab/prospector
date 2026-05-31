@@ -3,6 +3,8 @@ import { auditBatch } from "./audit-batch.js";
 import { worklist } from "./worklist.js";
 import { enrich } from "./enrich.js";
 import { runLocalCsv } from "./local-csv.js";
+import { runDossierCsv } from "./dossier-from-csv.js";
+import { dbExport } from "./db-export.js";
 import { PLAYBOOKS } from "./playbooks.js";
 import { pool } from "./db.js";
 
@@ -17,6 +19,7 @@ interface Flags {
   limit?: number;
   start?: number;
   force?: boolean;
+  allowQuick?: boolean;
   help?: boolean;
 }
 
@@ -34,6 +37,7 @@ function parseArgs(argv: string[]): Flags {
       case "--limit": f.limit = Number(argv[++i]); break;
       case "--start": f.start = Number(argv[++i]); break;
       case "--force": f.force = true; break;
+      case "--allow-quick": f.allowQuick = true; break;
       case "-h": case "--help": f.help = true; break;
       default:
         if (argv[i].startsWith("--")) { console.error(`Unknown flag: ${argv[i]}`); process.exit(1); }
@@ -52,7 +56,9 @@ Commands:
             Discover businesses via Google Places and store them.
 
   audit     --playbook <id> [--limit 200]
-            Cheap-audit un-audited prospects, score pain, qualify.
+            Low-level cheap audit only. Blocked by default for outreach because
+            every usable audit must include browser SEMrush + LinkedIn.
+            Use --allow-quick only for debugging.
 
   enrich    --playbook <id> [--city "<City, ST>"] [--limit N] [--force]
             Crawl contact/about/team pages, extract emails/socials/forms/people,
@@ -62,26 +68,42 @@ Commands:
             Export a ranked, enriched worklist (markdown + CSV) to outputs/.
 
   pipeline  --playbook <id> --cities "City A;City B" [--limit N]
-            Run source for each city, then audit, enrich, and export a combined worklist.
+            Legacy quick pipeline. Blocked by default; use deep browser dossier
+            research for outreach-ready data.
 
   csv       --playbook <id> --input leads.csv [--output enriched.csv] [--limit N]
-            No-database mode: read an Excel/Sheets-exported CSV, crawl/audit/enrich,
-            and write a prioritized CSV.
+            Legacy quick CSV. Blocked by default because it is not Semrush +
+            LinkedIn browser complete. Use --allow-quick only for debugging.
+
+  dossier-csv --input enriched.csv [--output prospect-dossier.csv] [--limit N]
+            Convert a quick enriched CSV into the 70-column dossier contract.
+            Rows are marked partial until the browser SEMrush/LinkedIn pass is complete.
+
+  db-export
+            Export researched Postgres dossiers to outputs/prospect-dossier-from-db.csv
+            plus one markdown dossier per prospect.
 
   playbooks
             List available ICP playbooks.
 
 Playbooks: ${ids}
 
-Typical Week-1 run:
+  Typical Week-1 run:
   pnpm source   --playbook roofing --city "Austin, TX"
-  pnpm audit    --playbook roofing
-  pnpm enrich   --playbook roofing --city "Austin, TX"
-  pnpm worklist --playbook roofing --city "Austin, TX"
 
-  pnpm pipeline --playbook med_spa --cities "Berlin, Germany;New York, NY;Dubai, UAE;Riyadh, Saudi Arabia;Miami, FL"
-  pnpm csv --playbook med_spa --input ./inputs/leads.csv --limit 50
+Outreach-ready rule:
+  Do browser research first: rendered page audit + SEMrush overview/competitors +
+  LinkedIn founder/DM2 verification. Only persisted dossiers pass the hard gate.
 `);
+}
+
+function assertQuickAllowed(command: string, flags: Flags) {
+  if (flags.allowQuick || process.env.PROSPECT_ALLOW_QUICK_AUDIT === "1") return;
+  console.error(
+    `[${command}] blocked: quick audit paths are not outreach-ready. ` +
+    "Run the browser dossier flow with SEMrush + LinkedIn, or pass --allow-quick only for debugging.",
+  );
+  process.exit(1);
 }
 
 async function main() {
@@ -112,6 +134,7 @@ async function main() {
 
     case "audit":
       if (!flags.playbook) { console.error("audit requires --playbook"); process.exit(1); }
+      assertQuickAllowed("audit", flags);
       await auditBatch({ playbookId: flags.playbook, limit: flags.limit });
       break;
 
@@ -127,6 +150,7 @@ async function main() {
 
     case "pipeline":
       if (!flags.playbook) { console.error("pipeline requires --playbook"); process.exit(1); }
+      assertQuickAllowed("pipeline", flags);
       {
         const cities = flags.cities ?? (flags.city ? [flags.city] : []);
         if (!cities.length) {
@@ -147,6 +171,7 @@ async function main() {
         console.error("csv requires --playbook and --input");
         process.exit(1);
       }
+      assertQuickAllowed("csv", flags);
       await runLocalCsv({
         playbookId: flags.playbook,
         input: flags.input,
@@ -154,6 +179,23 @@ async function main() {
         limit: flags.limit,
         start: flags.start,
       });
+      break;
+
+    case "dossier-csv":
+      if (!flags.input) {
+        console.error("dossier-csv requires --input");
+        process.exit(1);
+      }
+      runDossierCsv({
+        input: flags.input,
+        output: flags.output,
+        limit: flags.limit,
+        start: flags.start,
+      });
+      break;
+
+    case "db-export":
+      await dbExport();
       break;
 
     default:

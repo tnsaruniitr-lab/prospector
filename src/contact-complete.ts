@@ -5,8 +5,9 @@ import type { DossierContact } from "./dossier.js";
 /** Ordered email-pattern candidates for a person at a domain (most-likely first). */
 export function emailCandidates(fullName: string, domain: string): string[] {
   const parts = fullName
+    .split(",")[0] // drop credentials after a comma ("Nicole Habib, MMS, PA-C" → "Nicole Habib")
     .toLowerCase()
-    .replace(/\b(dr|prof|mr|mrs|ms|maj|gen|major|general|sir|dame)\.?\b/g, " ")
+    .replace(/\b(dr|prof|mr|mrs|ms|maj|gen|major|general|sir|dame|md|do|dds|dmd|rn|np|pa|msn|mms|mba|bsn|facs|faad|phd|esq)\.?\b/g, " ")
     .replace(/[^a-z\s]/g, " ")
     .trim()
     .split(/\s+/)

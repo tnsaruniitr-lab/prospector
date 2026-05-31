@@ -75,6 +75,7 @@ export interface Dossier {
   leadOffer: "aeo" | "bot" | "attribution";
   pitch: string;
   priorityNote?: string;
+  researchStatus?: string;
   outreachStatus?: string;
   notes?: string;
   researchedNote?: string;
@@ -233,7 +234,7 @@ export function flattenDossier(d: Dossier): Record<string, string> {
     hook: d.hook ?? "",
     weak_points: (d.weakPoints ?? []).map((w, i) => `${i + 1}. ${w.gap}`).join(" | "),
     pitch: d.pitch, priority_note: d.priorityNote ?? "",
-    research_status: hasComp ? "researched" : "partial",
+    research_status: d.researchStatus ?? (hasComp ? "researched" : "partial"),
     outreach_status: d.outreachStatus ?? "", notes: d.notes ?? "",
     sources: d.researchedNote ?? "",
   };

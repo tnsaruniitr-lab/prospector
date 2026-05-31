@@ -11,6 +11,12 @@ interface SourceOpts {
 }
 
 /**
+ * OPTIONAL headless discovery via the Google Places API (needs GOOGLE_MAPS_API_KEY).
+ * This is NOT the default path. The canonical discovery is browser-first and keyless:
+ * see the research-prospect skill Stage 0 — Google Maps + `src/browser/maps-extract.js`
+ * → `recordCandidates()`. Keep this module only as a headless fallback for when a key
+ * already exists (e.g. an unattended cron); the browser path needs no API keys.
+ *
  * Discover businesses for one playbook in one city: run each search seed
  * through Places, dedupe by place_id, and store as prospects under a campaign.
  * Re-running is safe — existing prospects (and their audits) are left intact.

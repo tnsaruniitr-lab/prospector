@@ -1,0 +1,75 @@
+import type { Dossier, DossierContact } from "./dossier.js";
+
+function text(d: Dossier) {
+  const people = [d.contacts.founder, d.contacts.decisionMaker2, ...(d.contacts.others ?? [])]
+    .filter(Boolean)
+    .map((p) => `${p?.name ?? ""} ${p?.role ?? ""} ${p?.linkedin ?? ""} ${p?.source ?? ""}`)
+    .join(" ");
+  return `${d.notes ?? ""} ${d.researchedNote ?? ""} ${people}`.toLowerCase();
+}
+
+function filled(v: unknown) {
+  return v !== undefined && v !== null && String(v).trim() !== "";
+}
+
+function people(d: Dossier): DossierContact[] {
+  return [d.contacts.founder, d.contacts.decisionMaker2, ...(d.contacts.others ?? [])]
+    .filter((p): p is DossierContact => !!p);
+}
+
+/**
+ * A prospect is not "researched" unless the browser pass happened.
+ * The website audit alone is intentionally insufficient for outreach data.
+ */
+export function deepResearchGateIssues(d: Dossier): string[] {
+  const issues: string[] = [];
+  const notes = text(d);
+  const cv = d.competitive;
+  const ai = cv.aiVisibility;
+
+  const hasSemrushMetrics =
+    filled(cv.authorityScore) ||
+    filled(cv.organicTraffic) ||
+    filled(cv.organicKeywords) ||
+    filled(cv.backlinks) ||
+    filled(cv.refDomains) ||
+    filled(ai?.mentions) ||
+    filled(ai?.citedPages);
+  const hasSemrushSource = /semrush/.test(notes);
+  if (!hasSemrushMetrics || !hasSemrushSource) {
+    issues.push("missing SEMrush browser pass: overview metrics and source note are required");
+  }
+
+  const hasCompetitivePass =
+    (cv.competitors?.length ?? 0) > 0 ||
+    !!cv.categoryAiLeader ||
+    /competitor|competitive set thin|no data|thin/.test(notes);
+  if (!hasCompetitivePass) {
+    issues.push("missing SEMrush competitive pass: competitors, category AI leader, or explicit thin/no-data note required");
+  }
+
+  const ps = people(d);
+  const explicitNotPublic =
+    /owner not public|founder not public|not publicly findable|no public linkedin|linkedin genuinely not found|verified absent|0 linkedin|not found/.test(notes);
+  const hasLinkedInEvidence =
+    ps.some((p) => filled(p.linkedin)) ||
+    /linkedin/.test(notes);
+  if (!ps.length && !explicitNotPublic) {
+    issues.push("missing LinkedIn/person pass: founder or DM2 required, or explicit owner-not-public note");
+  }
+  if (!hasLinkedInEvidence && !explicitNotPublic) {
+    issues.push("missing LinkedIn browser pass: profile URL/evidence or explicit not-found result required");
+  }
+
+  return issues;
+}
+
+export function assertDeepResearchComplete(d: Dossier) {
+  const issues = deepResearchGateIssues(d);
+  if (issues.length) {
+    throw new Error(
+      `Deep research gate failed for ${d.domain}: ${issues.join("; ")}. ` +
+      "Do the browser SEMrush + LinkedIn pass before recording a researched dossier.",
+    );
+  }
+}

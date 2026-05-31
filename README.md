@@ -2,15 +2,18 @@
 
 Audit-led outbound for local-service ICPs. It **discovers** businesses by ICP + city (Google Places), **cheap-audits** each one's website for SEO/AEO pain using the existing `aeo-seo-auditor`, **qualifies** them (skip the no-budget bottom and the no-pain top), and emits a ranked, **hand-workable worklist** — every prospect pre-loaded with the audit-derived hook and a suggested opener.
 
-This is the **Week-1 MVP**: source → audit → enrich contacts → rank → worklist. Outreach is high-touch and manual by design — the goal is to validate that *the audit is a hook that gets replies* before building any automation. Sending/sequence tracking can come after the lead/contact quality is proven.
+This is the **Week-1 MVP**: source → deep browser research → dossier → rank. Outreach is high-touch and manual by design — the goal is to validate that *the audit is a hook that gets replies* before building any automation. Sending/sequence tracking can come after the lead/contact quality is proven.
+
+**Non-negotiable quality gate:** no prospect is outreach-ready from a website audit alone. Every researched dossier must include the browser SEMrush pass (overview + AI visibility + competitor/category context) and the browser LinkedIn/person pass (founder/DM2 verified, or an explicit not-public/not-found note). `recordDossier()` enforces this.
 
 ## Pipeline
 
 ```
 source     Places (category × city)          → prospect.prospects
-audit      aeo-seo-auditor (cheap, batched)  → prospect.audits + qual_status
-enrich     site crawl + optional Apollo       → prospect.contacts + channel fields
-worklist   priority + contacts + audit hook   → outputs/<playbook>-<city>-worklist.{md,csv}
+audit      low-level quick audit only         → blocked by default; debugging only
+enrich     low-level site crawl only          → not outreach-ready without browser pass
+worklist   legacy quick worklist              → not final outreach data
+dossier    browser research + SEMrush + LI    → outputs/prospect-dossier*.csv + markdown briefs
 ```
 
 ## Stack
@@ -37,10 +40,9 @@ Requirements: Node 20+, `python3` and `curl` (used by the auditor), and the sibl
 
 ```bash
 pnpm source   --playbook roofing --city "Austin, TX"   # discover + store
-pnpm audit    --playbook roofing                       # cheap-audit + qualify
-pnpm enrich   --playbook roofing --city "Austin, TX"   # site crawl + optional Apollo
-pnpm worklist --playbook roofing --city "Austin, TX"   # export ranked worklist
-pnpm pipeline --playbook med_spa --cities "Berlin, Germany;New York, NY"
+pnpm dossier:csv --input outputs/medspa-sample-10-enriched.csv \
+  --output outputs/medspa-sample-10-dossier.csv
+pnpm db:export                                         # export researched dossiers from DB
 
 pnpm playbooks                                          # list ICP playbooks
 ```
@@ -49,15 +51,13 @@ Flags: `--seed "<query>"` (override search seeds), `--max-pages N` (≤3, 20 res
 
 ## First vertical/cities
 
-Recommended first pass:
+Recommended first pass: discover candidates by geo/category, then work the highest-value
+rows through the browser dossier flow one by one. Do not use the legacy quick pipeline for
+outreach data.
 
-```bash
-pnpm pipeline --playbook med_spa \
-  --cities "Berlin, Germany;New York, NY;Dubai, UAE;Riyadh, Saudi Arabia;Miami, FL" \
-  --limit 500
-```
+The quick CSV export includes priority, AEO/SEO issue scores, website/social/contact-form channels, best contact, LinkedIn profile URL when found, source/confidence, and the top audit hook. It is blocked by default for normal runs because it is not browser Semrush + LinkedIn complete; pass `--allow-quick` only for debugging.
 
-The CSV export includes priority, AEO/SEO issue scores, website/social/contact-form channels, best contact, LinkedIn profile URL when found, source/confidence, and the top audit hook.
+The dossier export is the richer contract for outreach research: 70 columns covering identity, contacts, founder/DM2, rendered audit fields, SEMrush SEO + AI visibility, competitors, top AEO problems/fixes, hook, pitch, priority note, status, and sources. `pnpm dossier:csv` converts a quick enriched CSV into that shape and marks rows `partial`; `pnpm db:export` exports fully researched Postgres dossiers as `outputs/prospect-dossier-from-db.csv`.
 
 ## How qualification works
 

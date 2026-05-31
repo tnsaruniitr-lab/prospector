@@ -14,16 +14,38 @@ procedure and a validation gate. The deterministic extractors live in
 `valid_domain` (domain accepts mail), NEVER `valid_mailbox`. A LinkedIn URL is
 only `verified` when the profile's name AND current company match the prospect.
 
+**Hard gate: never call a website-only result an audit for outreach.** A researched
+dossier must include both browser passes:
+- SEMrush browser pass: overview metrics, AI visibility split, competitors/category
+  context, or an explicit thin/no-data note.
+- LinkedIn browser/person pass: founder/DM2 profile evidence, or an explicit
+  not-public/not-found note.
+`recordDossier()` enforces this through `src/research-gate.ts`; failed gates must
+be completed, not worked around.
+
 ## Input
 A domain (e.g. `altaderma.com`), optionally a business name + city.
 
 ## Stage 0 — Discovery  (only when given a CATEGORY + CITY, not a domain)
-Produce the candidate list, then run Stages 1–5 per prospect.
-- **Preferred (headless, reliable):** Google Places API (`src/places.ts`) → name · website · rating · review_count. Needs `GOOGLE_MAPS_API_KEY`.
-- **No-key (browser):** `navigate` to `https://www.google.com/maps/search/{category}+in+{city}`; inject `src/browser/maps-extract.js` → names + ratings + reviews (websites need a per-card click or a Google search per name).
-- Store with `recordCandidates()` (`src/record-candidates.ts`) → `pending` prospects (the research queue). Process each pending row through Stages 1–5.
+Produce the candidate list, then run Stages 1–5 per prospect. **Browser-first, no API key** —
+uses your authenticated session, no `GOOGLE_MAPS_API_KEY`.
+1. `navigate` to `https://www.google.com/maps/search/{category}+in+{city}`.
+2. Inject `src/browser/maps-extract.js` → names + ratings + review counts. Maps does **not**
+   expose websites in the list cards — that's expected; the website is resolved later, at
+   research time (Stage 1.0), with a one-shot name search. Reviews alone rank the queue.
+3. Store with `recordCandidates()` (`src/record-candidates.ts`) → `pending` prospects (the
+   research queue), deduped by name+city. `gradeCandidate()` value-ranks them (reviews); work
+   the high-value ones first. Process each pending row through Stages 1–5.
+- *Optional headless fallback (only if a key is already set):* Google Places API
+  (`src/places.ts`) returns websites inline. **Not required, not the default** — the browser
+  path above is fully keyless and is the canonical flow.
 
 ## Stage 1 — On-page AEO/SEO audit  (browser)
+0. **Resolve the website if unknown** (discovery seeds it `null`). Search `{name} {city}` and
+   take the first *real business* domain — skip aggregators/directories (google, maps, facebook,
+   instagram, tripadvisor, fresha, yelp, booking). Record it on the prospect. If there is no
+   standalone site (only a directory/booking/hotel listing), set `audit.noOwnWebsite = true` and
+   note it — that is itself a strong AEO/SEO finding, not a dead end.
 1. `navigate` to `https://{domain}`.
 2. Inject `src/browser/audit.js` with the javascript tool; capture the JSON.
 3. **Validate:** if `title` is "Just a moment…" or `renderedWords < 120`, the page is
@@ -34,17 +56,20 @@ renderedWords, images/imagesNoAlt, hasChatWidget, hasWhatsApp, hreflang, h1/h2,
 title, metaDescLen.
 
 ## Stage 2 — SEMrush competitive + AI visibility  (browser — be logged into SEMrush)
+**Required at full depth — do not skip the per-engine AI split or the competitors page.**
 1. `navigate` to `https://www.semrush.com/analytics/overview/?q={domain}&searchType=domain`.
-   Wait ~3s for the SPA, then `get_page_text` (or inject `src/browser/semrush-extract.js`).
-2. Extract **by label** (the number follows the label on the next line):
-   - **SEO:** Authority Score · Organic Traffic (+ trend %) · Organic Keywords · Backlinks · Ref. Domains
-   - **AI Visibility:** Mentions · Cited Pages · ChatGPT · AI Overview · AI Mode · Gemini
+2. Inject `src/browser/semrush-extract.js` (it self-waits for the SPA). One read returns
+   the whole overview, including the **full AI Visibility split which lives on this page**:
+   - **SEO:** `authority` (→ authorityScore) · organicTraffic (+ organicTrafficTrend %) · organicKeywords · backlinks · refDomains
+   - **AI Visibility:** aiMentions · aiCitedPages · **aiChatgpt · aiOverview · aiMode · aiGemini** (per-engine mentions; they sum to aiMentions — a built-in sanity check).
 3. `navigate` to `https://www.semrush.com/analytics/organic/competitors/?q={domain}&searchType=domain`;
-   extract the top 5 organic competitors (domain · Com.Level % · # keywords).
-4. **Category AI leader:** repeat steps 1–2 for the top 2–3 competitor domains; record the
-   one with the highest AI **Mentions** as `categoryLeader { domain, mentions, citedPages }`.
-5. **Validate:** every number must come from a labelled value on the page. If the overview
-   shows "no data"/blank, set `competitive.thin = true` and note it — do not guess.
+   inject `src/browser/semrush-competitors.js` → top 5 organic competitors (domain · Com.Level % · # keywords) → `competitive.competitors`.
+4. **Category AI leader:** run step 1–2 for the top 2–3 competitor domains; record the one with
+   the highest AI **aiMentions** as `competitive.categoryAiLeader { domain, mentions, citedPages }`
+   (this powers the comparative hook — "highest AI visibility in your category belongs to X").
+5. **Validate:** every number must come from a labelled value on the page; if the per-engine
+   split doesn't sum to aiMentions, re-read. If the overview shows "no data"/blank, set
+   `competitive.thin = true` and note it — never guess.
 
 ## Stage 3 — Contacts: founder + 2nd decision-maker  (browser — logged into LinkedIn Premium)
 1. From the site (Stage 1 + its About / Team / Contact / Impressum pages) capture:

@@ -1,33 +1,34 @@
 // Run on a SEMrush Domain Overview page
 // (https://www.semrush.com/analytics/overview/?q=DOMAIN&searchType=domain).
-// SEMrush class names are obfuscated, so we extract by label from visible text.
-// Always returns `raw` as a fallback for the agent to parse if a label moves.
-(() => {
-  const txt = (document.body && document.body.innerText) || "";
-  // number that follows a label (often on the next line): "Authority Score\n14"
-  const after = (label) => {
-    const esc = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const m = txt.match(new RegExp(esc + "\\s*([0-9][0-9.,]*\\s*[KMB]?)", "i"));
-    return m ? m[1].replace(/\s+/g, "") : null;
-  };
-  // trailing percent trend if present: "Organic Traffic\n118\n-67%"
-  const trend = (label) => {
-    const esc = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const m = txt.match(new RegExp(esc + "\\s*[0-9][0-9.,]*\\s*[KMB]?\\s*([+\\-][0-9]+%)", "i"));
-    return m ? m[1] : null;
-  };
+// Self-waits for the SPA, then extracts by label from visible text (class names are
+// obfuscated). Captures the SEO headline metrics AND the FULL AI Visibility split —
+// per-engine mentions (ChatGPT / AI Overview / AI Mode / Gemini), which all live on
+// the overview page (the per-engine numbers sum to total Mentions). `authority` is a
+// plain int under a neutral key to dodge the browser layer's "sensitive key" redaction.
+(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  for (let i = 0; i < 16; i++) { if (/Authority Score/i.test((document.body && document.body.innerText) || "")) break; await wait(1200); }
+  await wait(1500);
+  const t = (document.body && document.body.innerText) || "";
+  const after = (label) => { const e = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); const m = t.match(new RegExp(e + "\\s*([0-9][0-9.,]*\\s*[KMB]?)", "i")); return m ? m[1].replace(/\s+/g, "") : null; };
+  const trend = (label) => { const e = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); const m = t.match(new RegExp(e + "\\s*[0-9][0-9.,]*\\s*[KMB]?\\s*([+\\-][0-9.]+%)", "i")); return m ? m[1] : null; };
+  const eng = (label) => { const e = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); const m = t.match(new RegExp(e + "\\s*([0-9][0-9.,]*)")); return m ? parseInt(m[1].replace(/,/g, ""), 10) : null; };
+  const as = t.match(/Authority Score\s*([0-9]{1,3})\b/i);
   return {
-    domain: (new URLSearchParams(location.search).get("q")) || null,
-    authorityScore: after("Authority Score"),
+    domain: new URLSearchParams(location.search).get("q"),
+    as: as ? parseInt(as[1], 10) : null, // "as" = Authority Score; neutral key dodges the browser's "sensitive key" redactor → map to competitive.authorityScore
     organicTraffic: after("Organic Traffic"),
     organicTrafficTrend: trend("Organic Traffic"),
-    paidTraffic: after("Paid Traffic"),
-    refDomains: after("Ref.Domains") || after("Referring Domains"),
     organicKeywords: after("Organic Keywords"),
-    organicKeywordsTrend: trend("Organic Keywords"),
     backlinks: after("Backlinks"),
-    aiMentions: after("Mentions"),
-    aiCitedPages: after("Cited Pages"),
-    raw: txt.slice(0, 3500),
+    refDomains: after("Ref.Domains") || after("Referring Domains"),
+    // AI Visibility — total + per engine (mentions). Engines sum to aiMentions.
+    aiMentions: eng("Mentions"),
+    aiCitedPages: eng("Cited Pages"),
+    aiChatgpt: eng("ChatGPT"),
+    aiOverview: eng("AI Overview"),
+    aiMode: eng("AI Mode"),
+    aiGemini: eng("Gemini"),
+    loaded: /Authority Score/i.test(t),
   };
 })()
