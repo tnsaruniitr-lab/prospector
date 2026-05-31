@@ -137,7 +137,7 @@ async function build(r: R): Promise<Dossier> {
       competitors: ai.competitors ?? [],
       ...(r.isLeader ? {} : { categoryAiLeader: { domain: LEADER.domain, mentions: LEADER.mentions, citedPages: LEADER.citedPages, note: "highest AI visibility in the Miami set" } }),
     },
-    topAiProblems: dx.problems, topFixes: dx.fixes, hook: dx.hook, weakPoints: dx.weakPoints,
+    topAiProblems: dx.problems, topFixes: dx.fixes, hook: dx.hook, weakPoints: dx.weakPoints, subjectHeadline: dx.subjectHeadline ?? undefined,
     leadOffer: "aeo", pitch: r.pitch, outreachStatus: "new", notes,
     researchedNote: "Live Miami med-spa batch: browser-Maps discovery + rendered on-page audit + SEMrush overview + web search for decision-makers.",
   };

@@ -72,6 +72,7 @@ export interface Dossier {
   topAiProblems?: DiagnosisProblem[];
   topFixes?: string[];
   hook?: string;
+  subjectHeadline?: string; // AI-visibility comparison vs the category leader — outreach subject line
   leadOffer: "aeo" | "bot" | "attribution";
   pitch: string;
   priorityNote?: string;
@@ -196,7 +197,7 @@ export const DOSSIER_COLUMNS = [
   "hreflang", "rendered_words", "images", "images_no_alt", "has_whatsapp", "has_whatsapp_bot", "has_chatbot",
   "authority_score", "organic_traffic", "traffic_trend", "organic_keywords", "backlinks", "ref_domains",
   "ai_mentions", "ai_cited_pages", "ai_chatgpt", "ai_gemini", "ai_overview", "ai_mode", "top_competitors", "category_ai_leader", "category_ai_leader_mentions",
-  "lead_offer", "top_3_ai_problems", "top_3_fixes", "hook", "weak_points", "pitch", "priority_note", "research_status", "outreach_status", "notes", "sources",
+  "lead_offer", "subject_headline", "top_3_ai_problems", "top_3_fixes", "hook", "weak_points", "pitch", "priority_note", "research_status", "outreach_status", "notes", "sources",
 ] as const;
 
 export function flattenDossier(d: Dossier): Record<string, string> {
@@ -229,6 +230,7 @@ export function flattenDossier(d: Dossier): Record<string, string> {
     top_competitors: (s.competitors ?? []).map((x) => `${x.domain}(${x.keywords ?? "?"})`).join("; "),
     category_ai_leader: s.categoryAiLeader?.domain ?? "", category_ai_leader_mentions: s.categoryAiLeader?.mentions?.toString() ?? "",
     lead_offer: d.leadOffer,
+    subject_headline: d.subjectHeadline ?? "",
     top_3_ai_problems: (d.topAiProblems ?? []).map((p, i) => `${i + 1}. ${p.text} [${p.evidence}]`).join(" | "),
     top_3_fixes: (d.topFixes ?? []).map((p, i) => `${i + 1}. ${p}`).join(" | "),
     hook: d.hook ?? "",

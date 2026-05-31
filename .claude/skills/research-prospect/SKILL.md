@@ -90,8 +90,14 @@ title, metaDescLen.
    a LinkedIn URL; never mark an unverified email as confirmed.
 
 ## Stage 4 — Synthesis  (code, deterministic — do NOT hand-write)
-Call `synthesizeDiagnosis()` (`src/synthesis.ts`) with the Stage-1/2 signals →
-top-3 problems (each badged hard / measured / comparative) + top-3 fixes + the hook.
+Call `synthesizeDiagnosis()` (`src/synthesis.ts`) with the Stage-1/2 signals. Pass the
+SEO-hygiene signals too (`titleLen, metaDescLen, h1Count, noindex, hasCanonical, hasViewport`)
+so the SEO rules fire, not just schema/AEO. Returns:
+- `problems`/`fixes` — top-3 (the pitch), each badged hard / measured / comparative
+- `weakPoints` — the FULL ranked AEO+SEO issue list (nothing detected is dropped)
+- `hook` — the narrative opener
+- **`subjectHeadline`** — the AI-visibility comparison (brand `aiMentions` vs the
+  `categoryLeader`'s, both SEMrush-extracted) as an outreach subject line.
 
 ## Stage 5 — Persist  (code)
 Assemble the `Dossier` object (identity + contacts + audit + competitive + synthesis)

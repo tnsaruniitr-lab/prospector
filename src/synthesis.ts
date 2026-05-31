@@ -143,6 +143,7 @@ export function synthesizeDiagnosis(i: DiagnosisInput): {
   fixes: string[];
   hook: string;
   weakPoints: { gap: string; evidence: string; impact: string }[];
+  subjectHeadline: string | null;
 } {
   const fired = RULES.filter((r) => r.when(i)).sort((a, b) => b.weight - a.weight);
   const top = fired.slice(0, 3);
@@ -152,7 +153,28 @@ export function synthesizeDiagnosis(i: DiagnosisInput): {
     hook: buildHook(i, top),
     // FULL audit — every fired rule, ranked. gap = problem, impact = the fix.
     weakPoints: fired.map((r) => ({ gap: r.problem(i).text, evidence: r.problem(i).evidence, impact: r.fix(i) })),
+    subjectHeadline: buildSubjectHeadline(i),
   };
+}
+
+/**
+ * Outreach subject line built from the AI-visibility comparison: the prospect's
+ * SEMrush AI mentions vs the category AI leader's (a real competitor we also
+ * extracted). Deterministic — the gap IS the hook. Returns null if we lack both.
+ */
+export function buildSubjectHeadline(i: DiagnosisInput): string | null {
+  const leader = i.categoryLeader;
+  const brand = i.aiMentions;
+  if (!leader || brand == null || leader.mentions == null) return null;
+  const comp = leader.domain.replace(/^www\./, "");
+  if (brand === 0) return `${i.name} is invisible in AI search — ${comp} owns the answers`;
+  const ratio = leader.mentions / brand;
+  if (ratio >= 1.5) {
+    const x = ratio >= 3 ? `${Math.round(ratio)}×` : `${ratio.toFixed(1)}×`;
+    return `${comp} gets ${x} more AI mentions than ${i.name} (${leader.mentions} vs ${brand})`;
+  }
+  if (brand > leader.mentions) return `${i.name} already out-cites ${comp} in AI (${brand} vs ${leader.mentions}) — lock the lead in`;
+  return `${i.name} ${brand} vs ${comp} ${leader.mentions} AI mentions — a closeable gap`;
 }
 
 function buildHook(i: DiagnosisInput, top: Rule[]): string {
