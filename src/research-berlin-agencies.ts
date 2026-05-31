@@ -74,8 +74,8 @@ const PROSPECTS: R[] = [
     authorityScore: 25, organicTraffic: "3K", trafficTrend: "+17%", organicKeywords: "115", backlinks: "767", refDomains: "288",
     aiMentions: 5, aiCitedPages: 1, chatgpt: "4", aiOverview: "1", aiMode: "0", gemini: "0", competitors: [],
     instagram: "space.rocket.berlin",
-    founder: { name: "Sebastian Wenske", role: "CEO & Founder", linkedinVerified: true, source: "Space Rocket LinkedIn company People page (current)" },
-    decisionMaker2: { name: "Dennis Büchle", role: "Team Lead, Webdesign", linkedinVerified: true, source: "Space Rocket LinkedIn company People page (current)" },
+    founder: { name: "Sebastian Wenske", role: "CEO & Founder", linkedin: "https://www.linkedin.com/in/sebastian-wenske-361b27120", linkedinVerified: true, source: "Space Rocket LinkedIn company People page (current)" },
+    decisionMaker2: { name: "Dennis Büchle", role: "Team Lead, Webdesign", linkedin: "https://www.linkedin.com/in/dennis-buechle", linkedinVerified: true, source: "Space Rocket LinkedIn company People page (current)" },
     starAsset: "Sebastian Wenske (CEO & founder)",
     pitch: "Space Rocket is a German Web Award winner with 315 reviews and Authority 25 — yet it has ZERO structured data and just 5 AI mentions. The agency that builds award-winning sites for clients is itself invisible to ChatGPT. The most credible proof-of-competence it could ship is fixing its own AEO: Organization + ProfessionalService schema, Person markup for the team, and a results/FAQ hub.",
     notes: "Founder Sebastian Wenske (CEO) + Team Lead Dennis Büchle, both on the LinkedIn company page. Heavy-visual homepage (~12 rendered words) — thin crawlable text. IG @space.rocket.berlin.",
@@ -96,7 +96,7 @@ const PROSPECTS: R[] = [
     founder: { name: "Coskun Yukari", role: "Geschäftsführer", linkedinVerified: false, source: "Impressum cl-berlin.de (current GF; predecessor Tarkan Sahin exited 2024)" },
     starAsset: "Geschäftsführer Coskun Yukari",
     pitch: "Creative-Line has the foundations right (Organization + Person schema, 1,208 words, all 181 images alt-tagged, live chat) but at Authority 10 and 6 AI mentions it's invisible in AI search. The wins are FAQ + AggregateRating schema and content depth — turning a well-built site into a cited one.",
-    notes: "Geschäftsführer Coskun Yukari (current; predecessor Tarkan Sahin exited 2024). Only the founder/GF is the named public decision-maker; LinkedIn profiles not individually verified in this validation wave. info@cl-berlin.de · +49 30 46606650 · IG @creativeline_berlin.",
+    notes: "Geschäftsführer Coskun Yukari verified via Handelsregister (HRB 101448 B) + Impressum (predecessor Tarkan Sahin exited 2024); no personal LinkedIn found. No valid LinkedIn company page — the 'creativeline' slug is a different (Indian) agency, so only the founder is the public decision-maker. info@cl-berlin.de · +49 30 46606650 · IG @creativeline_berlin.",
   },
   {
     candidate: "Colex Werbeagentur", name: "Colex Werbeagentur", domain: "colex-werbeagentur.de", rating: 5.0, reviews: 146,
@@ -111,10 +111,11 @@ const PROSPECTS: R[] = [
     aiMentions: 1, aiCitedPages: 0, chatgpt: "1", aiOverview: "0", aiMode: "0", gemini: "0",
     competitors: [{ domain: "heldisch.com", commonLevel: "46%", keywords: 3 }, { domain: "unicom-berlin.de", commonLevel: "45%", keywords: 2 }, { domain: "mymedia.berlin", commonLevel: "25%", keywords: 1 }, { domain: "glueckberlin.de", commonLevel: "21%", keywords: 4 }],
     instagram: "colexwerbeagentur",
-    founder: { name: "Lisa Ut", role: "Inhaberin / Founder", linkedinVerified: false, source: "Impressum colex-werbeagentur.de (founded 2014, female-led)" },
+    founder: { name: "Lisa Ut", role: "Inhaberin / Founder", linkedinVerified: false, source: "Verified via Creditreform + Impressum colex-werbeagentur.de (no personal LinkedIn found)" },
+    decisionMaker2: { name: "Timur Ut", role: "Web Designer & Kundenberater (Ut family)", linkedin: "https://www.linkedin.com/in/timur-ut-771b8b17b", linkedinVerified: true, source: "Colex LinkedIn company People page (current employee)" },
     starAsset: "Inhaberin Lisa Ut",
     pitch: "Colex has LocalBusiness + Organization + Person schema (ahead of most agencies) but a thin 237-word homepage, an 81-char title, and just 1 AI mention. Deepen the content + add FAQ/AggregateRating and the schema head-start converts into AI citations in a category where even the leader has only 57.",
-    notes: "Inhaberin Lisa Ut (founded 2014; 6-person team). Only the founder is the named public decision-maker; LinkedIn not individually verified in this validation wave. IG @colexwerbeagentur.",
+    notes: "Inhaberin Lisa Ut (verified via Creditreform/Impressum; no personal LinkedIn). DM2 Timur Ut (Ut family) found on the Colex LinkedIn company People page. Founded 2014, 6-person team. IG @colexwerbeagentur.",
   },
 ];
 

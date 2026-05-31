@@ -82,7 +82,13 @@ title, metaDescLen.
    business email, phone, WhatsApp (`wa.me`), Instagram, booking link.
 2. **Company People page:** `navigate` to `https://www.linkedin.com/company/{slug}/people/`
    (slug from the site's LinkedIn link, or a business-name search). Inject
-   `src/browser/linkedin-extract.js` → each person's name + `/in/` URL.
+   `src/browser/linkedin-people.js` → each employee's name + role + **`/in/` URL** (the URL
+   is what lets `founder_linkedin`/`dm2_linkedin` populate — always capture it, not just the name).
+   **Confirm it's the RIGHT company** — slugs collide across countries (e.g. a Berlin agency's
+   guessed slug can resolve to an unrelated foreign company); match people's location/role to the
+   prospect. If there's no valid company page, find each decision-maker by individual search.
+   When a founder has no LinkedIn at all, the Impressum / Handelsregister / Creditreform is a valid
+   verification source — record it in `source` (don't force a LinkedIn URL).
 3. Identify:
    - **Founder / owner** — titles: founder, owner, CEO, medical/clinic director, managing partner, principal.
    - **DM2 (next-in-command)** — manager, operations, marketing director, co-founder, partner.
