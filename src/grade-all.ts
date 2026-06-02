@@ -32,3 +32,6 @@ for (const g of queued) console.log(`  ${String(g.score).padStart(3)}  ${g.name.
 
 console.log(`\n[grade] ${researched.length} researched · ${queued.length} queued.`);
 await pool.end();
+
+// also print the relevance worklist
+import { scoreRelevance } from "./relevance.js";

@@ -3,6 +3,7 @@
 // `renderDossier` turns the structured object into a hand-workable markdown brief.
 
 import type { DiagnosisProblem } from "./synthesis.js";
+import { scoreRelevance } from "./relevance.js";
 import { inferSemrushDatabase } from "./semrush.js";
 
 export interface DossierContact {
@@ -321,7 +322,10 @@ export const DOSSIER_COLUMNS = [
   "ai_chatgpt_gap", "ai_overview_gap", "ai_mode_gap", "ai_gemini_gap",
   "ai_competitor_2", "ai_competitor_2_ai_visibility", "ai_competitor_2_mentions", "ai_competitor_2_cited_pages", "ai_competitor_2_note",
   "ai_competitor_comparison", "ai_competitive_hook",
-  "lead_offer", "subject_headline", "top_3_ai_problems", "top_3_fixes", "hook", "weak_points", "pitch", "priority_note", "research_status", "outreach_status", "notes", "sources",
+  "lead_offer", "subject_headline", "top_3_ai_problems", "top_3_fixes", "hook", "weak_points", "pitch", "priority_note",
+  // ICP relevance verdict
+  "relevance_tier", "relevance_score", "value_prop_fit", "competitive_context", "relevance_factors", "relevance_verdict",
+  "research_status", "outreach_status", "notes", "sources",
 ] as const;
 
 export function flattenDossier(d: Dossier): Record<string, string> {
@@ -393,6 +397,18 @@ export function flattenDossier(d: Dossier): Record<string, string> {
     hook: d.hook ?? "",
     weak_points: (d.weakPoints ?? []).map((w, i) => `${i + 1}. ${w.gap}`).join(" | "),
     pitch: d.pitch, priority_note: d.priorityNote ?? "",
+    // ICP relevance verdict — computed at flatten time from the dossier
+    ...(() => {
+      const rv = scoreRelevance(d);
+      return {
+        relevance_tier: rv.tier,
+        relevance_score: rv.score.toString(),
+        value_prop_fit: rv.valueProp,
+        competitive_context: rv.competitiveContext,
+        relevance_factors: rv.factors.map((f) => `${f.factor}(${f.effect > 0 ? "+" : ""}${f.effect})`).join("; "),
+        relevance_verdict: rv.verdict,
+      };
+    })(),
     research_status: d.researchStatus ?? (hasComp ? "researched" : "partial"),
     outreach_status: d.outreachStatus ?? "", notes: d.notes ?? "",
     sources: d.researchedNote ?? "",

@@ -17,6 +17,7 @@
     "db:export": "tsx src/cli.ts db-export",
     "db:flow": "tsx src/db-flow.ts",
     "grade": "tsx src/grade-all.ts",
+    "relevance": "tsx src/relevance-worklist.ts",
     "playbooks": "tsx src/cli.ts playbooks",
     "dev": "tsx watch src/cli.ts",
     "build": "tsc"
