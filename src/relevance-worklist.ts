@@ -34,7 +34,7 @@ for (const r of scored) {
   console.log(`\n● ${r.name}  [grade ${r.grade_tier ?? "?"}/${r.priority ?? "?"}]  · ${r.rv.score}/100 relevance  · ${geo}`);
   console.log(`  VERDICT  : ${r.rv.verdict}`);
   console.log(`  PITCH    : ${r.rv.valueProp.slice(0, 140)}…`);
-  console.log(`  FACTORS  : ${r.rv.factors.map((f) => `${f.factor}(${f.effect > 0 ? "+" : ""}${f.effect})`).join("  ")}`);
+  console.log(`  FACTORS  : ${r.rv.factors.map((f: { factor: string; effect: number }) => `${f.factor}(${f.effect > 0 ? "+" : ""}${f.effect})`).join("  ")}`);
 }
 
 const counts = scored.reduce((acc, r) => { acc[r.rv.tier] = (acc[r.rv.tier] ?? 0) + 1; return acc; }, {} as Record<string, number>);
