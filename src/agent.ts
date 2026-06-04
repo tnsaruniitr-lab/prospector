@@ -14,6 +14,7 @@ import { spawn } from "node:child_process";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFileSync, existsSync, writeFileSync } from "node:fs";
+import { fetchAndExtract, buildBrandExtractPrompt, parseBrandExtract } from "./brand-infer.js";
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 // Package root: parent of src/ (dev via tsx) or dist/ (published). Claude runs
@@ -67,10 +68,26 @@ function writePlanAndPrompt(plan: Record<string, unknown>, limit: number): strin
   ].join("\n");
 }
 
+// Lightweight text-only Claude call (no browser/MCP needed) — used for brand
+// inference. Returns Claude's raw stdout. Runs in the user's Claude Code → no key.
+function invokeClaudeText(prompt: string): Promise<string> {
+  return new Promise((resolve) => {
+    const proc = spawn("claude", ["--print", prompt], {
+      cwd: existsSync(SKILL_PATH) ? PKG_ROOT : process.cwd(),
+      stdio: ["inherit", "pipe", "pipe"],
+      env: { ...process.env },
+    });
+    let out = "";
+    proc.stdout?.on("data", (c: Buffer) => { out += c.toString(); });
+    proc.on("close", () => resolve(out));
+    proc.on("error", (e) => resolve(`__ERROR__ ${e.message}`));
+  });
+}
+
 function invokeClaudeCode(prompt: string, onProgress: (stage: string, detail: string) => void): Promise<{ status: "ok" | "error"; output: string }> {
   return new Promise((resolve) => {
-    const args = ["--print", "--no-conversation", prompt];
-    console.log(`[agent] spawning: claude ${args.slice(0, 2).join(" ")} ...`);
+    const args = ["--print", prompt];
+    console.log(`[agent] spawning: claude --print ...`);
 
     // cwd = package root so Claude finds the skill + research code regardless of
     // where the user launched `prospect-engine connect` from.
@@ -158,6 +175,28 @@ function connect() {
 
       send({ type: "result", taskId, status: result.status, data: { output: result.output }, error: result.status === "error" ? result.output : undefined });
       console.log(`[agent] Task ${taskId} → ${result.status}`);
+    }
+
+    // ── LLM brand inference (no-key — runs in THIS machine's Claude Code) ──
+    if (msg.type === "infer_task") {
+      const { taskId, url } = msg as { taskId: string; url: string };
+      const send = (m: object) => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify(m));
+      console.log(`\n[agent] 🔎 Infer brand from ${url}`);
+      try {
+        const scraped = await fetchAndExtract(url);                       // scrape: plain code, no key
+        const prompt = buildBrandExtractPrompt(url, scraped);
+        const out = await invokeClaudeText(prompt);                       // reason: user's Claude Code, no key
+        if (out.startsWith("__ERROR__")) {
+          send({ type: "infer_result", taskId, status: "error", error: `Claude Code not available (${out.replace("__ERROR__", "").trim()}). Is it installed + on PATH?` });
+          return;
+        }
+        const parsed = parseBrandExtract(out);
+        if (!parsed) { send({ type: "infer_result", taskId, status: "error", error: "Claude returned non-JSON output" }); return; }
+        send({ type: "infer_result", taskId, status: "ok", data: { ...parsed, title: scraped.title, description: scraped.description } });
+        console.log(`[agent] infer → persona=${parsed.personaId} conf=${parsed.confidence}`);
+      } catch (e) {
+        send({ type: "infer_result", taskId, status: "error", error: e instanceof Error ? e.message : String(e) });
+      }
     }
   });
 

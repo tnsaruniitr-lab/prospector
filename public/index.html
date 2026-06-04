@@ -282,31 +282,57 @@ function app() {
       if (!this.brandUrl.trim()) return;
       this.detecting = true; this.detectMsg = ""; this.detectOk = false;
       try {
-        const r = await fetch(`${SERVER}/api/infer`, {
-          method: "POST", headers: { "content-type": "application/json" },
-          body: JSON.stringify({ url: this.brandUrl }),
-        });
-        const d = await r.json();
-        if (d.error) {
-          this.detectMsg = `Couldn't read that site (${d.error}). Fill it in manually.`; this.detectOk = false;
-        } else if (!d.confident) {
-          // Weak / no match — do NOT clobber existing brand fields. Manual fallback.
-          const hint = d.personaId ? ` (only a weak '${d.personaId}' signal)` : "";
-          this.detectMsg = `Read the site, but couldn't confidently tell what you sell${hint} — pick a persona manually below. Your brand was left unchanged.`;
-          this.detectOk = false;
-        } else {
-          // Decisive match — set fields cleanly (fresh name, no stale mix).
-          this.research.persona = d.personaId;
-          const p = this.personas.find(x => x.id === d.personaId);
-          if (d.title) this.brand.seller_name = d.title.split(/[-|–:]/)[0].trim();
-          this.brand.offer = d.suggestedOffer || (p ? p.offer : this.brand.offer);
-          await this.previewPlan();
-          const conf = Math.round((d.confidence || 0) * 100);
-          this.detectMsg = `Detected: ${p ? p.name : d.personaId} (${conf}% confidence). Edit anything below, then run.`;
-          this.detectOk = true;
+        let d = null, source = "keyword";
+        // Prefer the no-key LLM path (your Claude Code via the agent) when connected.
+        if (this.agentConnected && this.ws?.readyState === WebSocket.OPEN) {
+          this.detectMsg = "Analyzing with your Claude…";
+          try {
+            const res = await this.detectSmartViaAgent(this.brandUrl);
+            if (res.status === "ok") { d = res.data; source = "claude"; }
+          } catch (e) { /* fall through to keyword */ }
         }
+        // Fallback (or no agent): instant keyword matcher.
+        if (!d) {
+          const r = await fetch(`${SERVER}/api/infer`, {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: this.brandUrl }),
+          });
+          d = await r.json(); source = "keyword";
+          if (d.error) { this.detectMsg = `Couldn't read that site (${d.error}). Fill it in manually.`; this.detecting = false; return; }
+        }
+        this.applyDetect(d, source);
       } catch (e) { this.detectMsg = "Detection failed — fill it in manually."; this.detectOk = false; }
       this.detecting = false;
+    },
+
+    // Send an infer task to the agent (user's Claude Code) and await the result.
+    detectSmartViaAgent(url) {
+      return new Promise((resolve, reject) => {
+        const taskId = crypto.randomUUID();
+        this._inferResolvers = this._inferResolvers || {};
+        const timer = setTimeout(() => { delete this._inferResolvers[taskId]; reject(new Error("timeout")); }, 40000);
+        this._inferResolvers[taskId] = (msg) => { clearTimeout(timer); resolve(msg); };
+        this.ws.send(JSON.stringify({ type: "infer", agentToken: this.agentToken, url, taskId }));
+      });
+    },
+
+    // Apply a detection result (works for keyword InferResult OR LLM BrandExtract).
+    applyDetect(d, source) {
+      const confident = (d.confident !== undefined) ? d.confident : (!!d.personaId && (d.confidence || 0) >= 0.5);
+      const via = source === "claude" ? " (via your Claude)" : "";
+      if (!confident) {
+        const hint = d.personaId ? ` (weak '${d.personaId}' signal)` : "";
+        this.detectMsg = `Read the site, but couldn't confidently tell what you sell${hint}${via} — pick a persona manually below. Your brand was left unchanged.`;
+        this.detectOk = false; return;
+      }
+      this.research.persona = d.personaId;
+      const p = this.personas.find(x => x.id === d.personaId);
+      if (d.title) this.brand.seller_name = String(d.title).split(/[-|–:]/)[0].trim();
+      this.brand.offer = d.offer || d.suggestedOffer || (p ? p.offer : this.brand.offer);
+      this.previewPlan();
+      const conf = Math.round((d.confidence || 0) * 100);
+      this.detectMsg = `Detected: ${p ? p.name : d.personaId} (${conf}% confidence)${via}. Edit anything below, then run.`;
+      this.detectOk = true;
     },
 
     async loadPersonas() {
@@ -350,6 +376,10 @@ function app() {
           }
           if (msg.type === "agent_offline") {
             this.log.push("⏳ Agent offline — task queued. Run `npx prospect-engine connect` to start.");
+          }
+          if (msg.type === "infer_result") {
+            const r = this._inferResolvers && this._inferResolvers[msg.taskId];
+            if (r) { delete this._inferResolvers[msg.taskId]; r(msg); }
           }
         };
         this.ws.onclose = () => { setTimeout(() => this.connectWS(), 3000); };

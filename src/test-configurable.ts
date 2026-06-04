@@ -232,6 +232,34 @@ section("Onboarding — infer persona from site text");
     ent.title === "Cards & Expenses" && ent.description === "spend & track", ent.title);
 }
 
+// ═══ LLM path (no-key) — prompt builder + tolerant parser ════════════════════
+section("LLM path — extract prompt + parser");
+{
+  const { buildBrandExtractPrompt, parseBrandExtract } = await import("./brand-infer.js");
+
+  const prompt = buildBrandExtractPrompt("pemo.io", { title: "Pemo", description: "corporate cards", text: "smart corporate cards and expense tracking" });
+  check("T5.1 prompt grounds in scraped text + lists personas + forbids invention",
+    prompt.includes("smart corporate cards") && prompt.includes("ai_search_visibility") && /never invent/i.test(prompt));
+  check("T5.2 prompt has NO hardcoded vertical checklist (avoids priming)",
+    !/nurse at home|IV drip|physiotherapy at home/i.test(prompt));
+
+  // tolerant parsing
+  const clean = parseBrandExtract('{"personaId":"seo_services","offer":"SEO","services":["seo","links"],"customerTypes":["smb"],"vertical":"agency","confidence":0.8,"reasoning":"x"}');
+  check("T5.3 parses clean JSON + valid persona", clean?.personaId === "seo_services" && clean?.services.length === 2);
+
+  const backticked = parseBrandExtract('```json\n{"personaId":"web_redesign","offer":"sites","services":[],"customerTypes":[],"vertical":"x","confidence":0.7,"reasoning":"y"}\n```');
+  check("T5.4 strips ```json backticks", backticked?.personaId === "web_redesign");
+
+  const prose = parseBrandExtract('Here is the result:\n{"personaId":null,"offer":"corporate cards","services":[],"customerTypes":[],"vertical":"fintech","confidence":0.2,"reasoning":"fits none"}\nHope that helps!');
+  check("T5.5 extracts JSON from surrounding prose + null persona (pemo case)",
+    prose?.personaId === null && prose?.vertical === "fintech");
+
+  const badPersona = parseBrandExtract('{"personaId":"not_a_real_persona","offer":"x","confidence":0.9}');
+  check("T5.6 invalid personaId → null (must be a real library persona)", badPersona?.personaId === null);
+
+  check("T5.7 garbage → null", parseBrandExtract("not json at all") === null);
+}
+
 // ═══ summary ═══
 console.log(`\n${"═".repeat(50)}`);
 console.log(`RESULT: ${passed} passed, ${failed} failed`);

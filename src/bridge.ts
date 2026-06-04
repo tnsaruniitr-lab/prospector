@@ -134,6 +134,28 @@ export function attachBridge(httpServer: import("http").Server) {
         return;
       }
 
+      // ── Web client requests LLM brand inference (no-key, via the agent) ─
+      if (msg.type === "infer") {
+        const token = String(msg.agentToken || "");
+        const url = String(msg.url || "");
+        const taskId = String(msg.taskId || uuid());
+        const agent = agents.get(token);
+        if (agent && agent.ws.readyState === WebSocket.OPEN) {
+          send(agent.ws, { type: "infer_task", taskId, url });
+        } else {
+          send(ws, { type: "infer_result", taskId, status: "error", error: "agent offline" });
+        }
+        return;
+      }
+
+      // ── Agent returns an inference result → forward to watchers ─────────
+      if (msg.type === "infer_result") {
+        const token = [...agents.entries()].find(([, v]) => v.ws === ws)?.[0];
+        if (!token) return;
+        broadcast(token, msg);
+        return;
+      }
+
       // ── Agent sends progress update ───────────────────────────────────
       if (msg.type === "progress") {
         const token = [...agents.entries()].find(([, v]) => v.ws === ws)?.[0];

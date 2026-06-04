@@ -120,8 +120,8 @@ export function inferPersonaFromText(text: string): InferResult {
   };
 }
 
-// ── Fetch a URL + infer (server uses this) ──────────────────────────────────
-export async function inferFromUrl(rawUrl: string): Promise<InferResult> {
+// ── Fetch a URL → scraped text (plain code, no AI, no key) ──────────────────
+export async function fetchAndExtract(rawUrl: string): Promise<{ title: string; description: string; text: string }> {
   let url = rawUrl.trim();
   if (!/^https?:\/\//i.test(url)) url = "https://" + url;
   const u = new URL(url);
@@ -129,7 +129,6 @@ export async function inferFromUrl(rawUrl: string): Promise<InferResult> {
   if (/^(localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|169\.254\.)/.test(u.hostname)) {
     throw new Error("Refusing to fetch a local/private address");
   }
-
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 12_000);
   let html = "";
@@ -142,13 +141,82 @@ export async function inferFromUrl(rawUrl: string): Promise<InferResult> {
   } finally {
     clearTimeout(t);
   }
+  return extractSiteText(html);
+}
 
-  const { title, description, text } = extractSiteText(html);
+// ── Keyword inference from a URL (server uses this — instant, no key) ─────────
+export async function inferFromUrl(rawUrl: string): Promise<InferResult> {
+  const { title, description, text } = await fetchAndExtract(rawUrl);
   const inferred = inferPersonaFromText(text);
+  return { ...inferred, title, description, suggestedOffer: description || inferred.suggestedOffer };
+}
+
+// ── LLM path (no key — runs in the user's Claude Code via the agent) ─────────
+
+export interface BrandExtract {
+  personaId: string | null; // mapped to the library, or null if none fit
+  offer: string;
+  services: string[];
+  customerTypes: string[];
+  vertical: string;
+  confidence: number; // 0-1, Claude's own
+  reasoning: string;
+}
+
+/**
+ * Build the extraction prompt. Grounds Claude in the SCRAPED TEXT (anti-
+ * hallucination), maps to the validated persona library (or null), and — unlike
+ * the AnswerMonk version — uses NO hardcoded per-vertical checklists (which prime
+ * the model into over-reporting). Claude judges prominence itself.
+ */
+export function buildBrandExtractPrompt(domain: string, scraped: { title: string; description: string; text: string }): string {
+  const personaList = listPersonas()
+    .map((p) => `- ${p.id}: ${p.name} — ${p.offer}`)
+    .join("\n");
+  return [
+    "You are a business analyst. Identify what THIS company sells, grounded ONLY in the homepage text below.",
+    "Do NOT use outside knowledge or guess from the name — if the text is unclear, say so via low confidence.",
+    "",
+    `Domain: ${domain}`,
+    "Homepage (scraped):",
+    "---",
+    `Title: ${scraped.title}`,
+    `Description: ${scraped.description}`,
+    `Text: ${scraped.text.slice(0, 4000)}`,
+    "---",
+    "",
+    "Map them to the CLOSEST seller persona from this list, or null if none genuinely fit:",
+    personaList,
+    "",
+    "Return ONLY raw JSON (no markdown, no backticks):",
+    '{"personaId": "<one of the ids above or null>", "offer": "<one sentence, what they sell>",',
+    ' "services": ["<service>", ...], "customerTypes": ["<segment>", ...], "vertical": "<short category>",',
+    ' "confidence": <0..1>, "reasoning": "<one line>"}',
+    "",
+    "Rules: personaId must be from the list or null. List every service the text mentions, ranked by prominence — never invent one not in the text. Set confidence < 0.5 if the text is vague or fits no persona.",
+  ].join("\n");
+}
+
+/** Tolerant parser — strips backticks/prose, validates personaId against the library. */
+export function parseBrandExtract(raw: string): BrandExtract | null {
+  if (!raw) return null;
+  let s = raw.trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+  const start = s.indexOf("{");
+  const end = s.lastIndexOf("}");
+  if (start === -1 || end === -1) return null;
+  s = s.slice(start, end + 1);
+  let obj: Record<string, unknown>;
+  try { obj = JSON.parse(s); } catch { return null; }
+
+  let personaId = typeof obj.personaId === "string" ? obj.personaId : null;
+  if (personaId && !getPersona(personaId)) personaId = null; // must be a real library persona
   return {
-    ...inferred,
-    title,
-    description,
-    suggestedOffer: description || inferred.suggestedOffer,
+    personaId,
+    offer: String(obj.offer ?? ""),
+    services: Array.isArray(obj.services) ? obj.services.map(String) : [],
+    customerTypes: Array.isArray(obj.customerTypes) ? obj.customerTypes.map(String) : [],
+    vertical: String(obj.vertical ?? ""),
+    confidence: typeof obj.confidence === "number" ? Math.max(0, Math.min(1, obj.confidence)) : 0,
+    reasoning: String(obj.reasoning ?? ""),
   };
 }
