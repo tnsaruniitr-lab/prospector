@@ -287,13 +287,18 @@ function app() {
           body: JSON.stringify({ url: this.brandUrl }),
         });
         const d = await r.json();
-        if (d.error) { this.detectMsg = `Couldn't read that site (${d.error}). Fill it in manually.`; this.detectOk = false; }
-        else if (!d.personaId) { this.detectMsg = "Site read, but couldn't confidently detect what you sell — pick a persona below."; this.detectOk = false; }
-        else {
-          // pre-fill persona + brand fields (proposer/disposer — user can still edit)
+        if (d.error) {
+          this.detectMsg = `Couldn't read that site (${d.error}). Fill it in manually.`; this.detectOk = false;
+        } else if (!d.confident) {
+          // Weak / no match — do NOT clobber existing brand fields. Manual fallback.
+          const hint = d.personaId ? ` (only a weak '${d.personaId}' signal)` : "";
+          this.detectMsg = `Read the site, but couldn't confidently tell what you sell${hint} — pick a persona manually below. Your brand was left unchanged.`;
+          this.detectOk = false;
+        } else {
+          // Decisive match — set fields cleanly (fresh name, no stale mix).
           this.research.persona = d.personaId;
           const p = this.personas.find(x => x.id === d.personaId);
-          this.brand.seller_name = this.brand.seller_name || (d.title || "").split(/[-|–]/)[0].trim();
+          if (d.title) this.brand.seller_name = d.title.split(/[-|–:]/)[0].trim();
           this.brand.offer = d.suggestedOffer || (p ? p.offer : this.brand.offer);
           await this.previewPlan();
           const conf = Math.round((d.confidence || 0) * 100);
@@ -363,7 +368,10 @@ function app() {
       try {
         const r = await fetch(`${SERVER}/api/brand?token=${this.agentToken}`);
         const d = await r.json();
-        if (d) { this.brand = d; this.brandSaved = true; this.brandOpen = false; }
+        if (d) {
+          this.brand = d; this.brandSaved = true; this.brandOpen = false;
+          if (d.persona) { this.research.persona = d.persona; await this.previewPlan(); } // restore persona
+        }
       } catch {}
     },
 
@@ -371,10 +379,11 @@ function app() {
       await fetch(`${SERVER}/api/brand`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...this.brand, agent_token: this.agentToken }),
+        body: JSON.stringify({ ...this.brand, persona: this.research.persona, agent_token: this.agentToken }),
       });
       this.brandSaved = true;
       this.brandOpen = false;
+      this.detectMsg = ""; // clear any stale detect message on save
     },
 
     async loadProspects() {

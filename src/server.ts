@@ -49,6 +49,8 @@ async function migrateBridgeTasks() {
       created_at  timestamptz default now(),
       updated_at  timestamptz default now()
     )`).catch(() => {});
+  // v2: remember the selected persona with the brand (added after the table existed).
+  await pool.query(`alter table prospect.seller_profiles add column if not exists persona text`).catch(() => {});
 }
 
 function json(res: http.ServerResponse, data: unknown, status = 200) {
@@ -150,14 +152,18 @@ const httpServer = http.createServer(async (req, res) => {
 
   if (url === "/api/brand" && method === "POST") {
     const body = await readBody(req) as Record<string, unknown>;
-    const { agent_token, seller_name, offer, value_prop, fixes, target_verticals, min_reviews } = body;
+    const { agent_token, seller_name, offer, value_prop, fixes, target_verticals, min_reviews, persona } = body;
     if (!agent_token) { json(res, { error: "agent_token required" }, 400); return; }
-    await pool.query(`
-      insert into prospect.seller_profiles (agent_token, seller_name, offer, value_prop, fixes, target_verticals, min_reviews, updated_at)
-      values ($1,$2,$3,$4,$5,$6::jsonb,$7,now())
-      on conflict (agent_token) do update set seller_name=$2, offer=$3, value_prop=$4, fixes=$5, target_verticals=$6::jsonb, min_reviews=$7, updated_at=now()
-    `, [agent_token, seller_name, offer, value_prop, fixes, JSON.stringify(target_verticals || []), min_reviews || 25]);
-    json(res, { ok: true });
+    try {
+      await pool.query(`
+        insert into prospect.seller_profiles (agent_token, seller_name, offer, value_prop, fixes, target_verticals, min_reviews, persona, updated_at)
+        values ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,now())
+        on conflict (agent_token) do update set seller_name=$2, offer=$3, value_prop=$4, fixes=$5, target_verticals=$6::jsonb, min_reviews=$7, persona=$8, updated_at=now()
+      `, [agent_token, seller_name, offer, value_prop, fixes, JSON.stringify(target_verticals || []), min_reviews || 25, persona || null]);
+      json(res, { ok: true });
+    } catch (e) {
+      json(res, { ok: false, error: e instanceof Error ? e.message : String(e) }, 500);
+    }
     return;
   }
 
@@ -228,6 +234,10 @@ const httpServer = http.createServer(async (req, res) => {
 
 // Attach WebSocket bridge
 attachBridge(httpServer);
+
+// Safety net: a stray DB/handler error must NEVER kill the server process.
+process.on("unhandledRejection", (e) => console.error("[server] unhandledRejection (non-fatal):", e instanceof Error ? e.message : e));
+process.on("uncaughtException", (e) => console.error("[server] uncaughtException (non-fatal):", e instanceof Error ? e.message : e));
 
 httpServer.listen(port, () => console.log(`[server] running on :${port} — UI at /app`));
 

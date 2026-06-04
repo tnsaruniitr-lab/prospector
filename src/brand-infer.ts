@@ -41,11 +41,22 @@ export const PERSONA_KEYWORDS: Record<string, string[]> = {
 export interface InferResult {
   personaId: string | null;
   confidence: number; // 0-1
+  confident: boolean; // true only when the match is decisive enough to auto-apply
+  topScore: number; // # keyword hits for the winning persona
   scores: Record<string, number>;
   matched: string[];
   title: string;
   description: string;
   suggestedOffer: string;
+}
+
+// Decode the common HTML entities so "cards &amp; expenses" → "cards & expenses".
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&apos;|&#0*39;/g, "'").replace(/&nbsp;/g, " ")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)));
 }
 
 // ── HTML → text (title + meta description + visible body text) ───────────────
@@ -54,8 +65,8 @@ export function extractSiteText(html: string): { title: string; description: str
   const descM =
     html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i) ||
     html.match(/<meta[^>]+content=["']([^"']*)["'][^>]+name=["']description["']/i);
-  const title = (titleM?.[1] || "").replace(/\s+/g, " ").trim();
-  const description = (descM?.[1] || "").replace(/\s+/g, " ").trim();
+  const title = decodeEntities((titleM?.[1] || "").replace(/\s+/g, " ").trim());
+  const description = decodeEntities((descM?.[1] || "").replace(/\s+/g, " ").trim());
   const body = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
@@ -90,11 +101,17 @@ export function inferPersonaFromText(text: string): InferResult {
   const personaId = topScore > 0 ? topId : null;
   // confidence: how decisively the top persona beats the runner-up
   const confidence = topScore === 0 ? 0 : Math.min(1, topScore / (topScore + secondScore + 1) + (topScore >= 2 ? 0.15 : 0));
+  // Only auto-apply a DECISIVE match: ≥2 keyword hits AND a clear margin.
+  // A single stray keyword (e.g. a fintech's "hiring" careers link) must NOT
+  // clobber the user's brand — it falls back to manual.
+  const confident = topScore >= 2 && confidence >= 0.55;
 
   const persona = personaId ? getPersona(personaId) : null;
   return {
     personaId,
     confidence: Math.round(confidence * 100) / 100,
+    confident,
+    topScore,
     scores,
     matched: Array.from(new Set(matched)),
     title: "",

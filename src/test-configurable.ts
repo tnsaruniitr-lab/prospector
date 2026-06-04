@@ -218,6 +218,18 @@ section("Onboarding — infer persona from site text");
   // word-boundary: "seo" must not match "seoul"
   check("T4.8 keyword boundary: 'Seoul travel agency' does NOT match seo_services",
     inferPersonaFromText("Seoul travel agency tours and holidays").personaId !== "seo_services");
+
+  // CONFIDENCE GATE (the pemo.io bug): a single stray keyword must NOT auto-apply
+  const fintech = inferPersonaFromText("Smart corporate cards & expense tracking in Dubai. We're hiring!");
+  check("T4.9 single stray keyword ('hiring' on a fintech) → confident=false (no clobber)",
+    fintech.confident === false, `persona=${fintech.personaId} top=${fintech.topScore} confident=${fintech.confident}`);
+  check("T4.10 decisive multi-keyword match → confident=true",
+    inferPersonaFromText(aeoSite).confident === true);
+
+  // HTML entity decode
+  const ent = extractSiteText("<title>Cards &amp; Expenses</title><meta name='description' content='spend &amp; track'>");
+  check("T4.11 HTML entities decoded (&amp; → &)",
+    ent.title === "Cards & Expenses" && ent.description === "spend & track", ent.title);
 }
 
 // ═══ summary ═══
