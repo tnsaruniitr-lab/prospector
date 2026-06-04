@@ -8,6 +8,7 @@ import { scoreRelevance } from "./relevance.js";
 import { flattenDossier } from "./dossier.js";
 import { listPersonas, scaffoldPlan } from "./personas.js";
 import { safeParseResearchPlan } from "./research-plan.js";
+import { inferFromUrl } from "./brand-infer.js";
 
 // Railway entrypoint. Applies migrations on boot, serves the web UI + REST API
 // + WebSocket bridge so local research agents can connect from any machine.
@@ -105,6 +106,19 @@ const httpServer = http.createServer(async (req, res) => {
       defaultResearchSources: p.defaultResearchSources,
       defaultContactSource: p.defaultContactSource,
     })));
+    return;
+  }
+
+  // ── v2: infer persona from the seller's own website (onboarding) ──────────
+  if (url === "/api/infer" && method === "POST") {
+    const body = (await readBody(req)) as { url?: string };
+    if (!body.url) { json(res, { error: "url required" }, 400); return; }
+    try {
+      const result = await inferFromUrl(body.url);
+      json(res, result);
+    } catch (e) {
+      json(res, { error: e instanceof Error ? e.message : String(e) }, 400);
+    }
     return;
   }
 

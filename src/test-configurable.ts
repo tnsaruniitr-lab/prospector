@@ -182,6 +182,44 @@ section("Phase 2 — Plan-aware gate");
     !checkPlanComplete(incomplete, planDisabled).missing.some(m => m.includes("semrush_ai")));
 }
 
+// ═══ Website-first onboarding — inference ════════════════════════════════════
+section("Onboarding — infer persona from site text");
+{
+  const { inferPersonaFromText, extractSiteText } = await import("./brand-infer.js");
+
+  const aeoSite = "We help clinics get cited by ChatGPT and Gemini — AEO and AI search visibility for service businesses.";
+  check("T4.1 AEO copy → ai_search_visibility",
+    inferPersonaFromText(aeoSite).personaId === "ai_search_visibility", inferPersonaFromText(aeoSite).personaId || "null");
+
+  const webSite = "Award-winning website redesign and web development. Modern Webflow & WordPress sites that convert.";
+  check("T4.2 web-design copy → web_redesign",
+    inferPersonaFromText(webSite).personaId === "web_redesign", inferPersonaFromText(webSite).personaId || "null");
+
+  const seoSite = "We grow your organic traffic — SEO, rankings, backlinks and link building that lasts.";
+  check("T4.3 SEO copy → seo_services",
+    inferPersonaFromText(seoSite).personaId === "seo_services", inferPersonaFromText(seoSite).personaId || "null");
+
+  const recSite = "Talent acquisition and recruitment — we fill your open roles with vetted candidates fast.";
+  check("T4.4 recruiting copy → recruiting",
+    inferPersonaFromText(recSite).personaId === "recruiting", inferPersonaFromText(recSite).personaId || "null");
+
+  const vague = "We help businesses grow and reach their full potential with our solutions.";
+  const v = inferPersonaFromText(vague);
+  check("T4.5 vague copy → null persona + low confidence (manual fallback)",
+    v.personaId === null && v.confidence === 0, `persona=${v.personaId} conf=${v.confidence}`);
+
+  const decisive = inferPersonaFromText(aeoSite);
+  check("T4.6 decisive match → confidence > 0.5", decisive.confidence > 0.5, `conf=${decisive.confidence}`);
+
+  const ex = extractSiteText("<title>AEO Studio</title><meta name='description' content='AI search visibility'><body>chatgpt gemini aeo</body>");
+  check("T4.7 extractSiteText pulls title + description",
+    ex.title === "AEO Studio" && ex.description === "AI search visibility");
+
+  // word-boundary: "seo" must not match "seoul"
+  check("T4.8 keyword boundary: 'Seoul travel agency' does NOT match seo_services",
+    inferPersonaFromText("Seoul travel agency tours and holidays").personaId !== "seo_services");
+}
+
 // ═══ summary ═══
 console.log(`\n${"═".repeat(50)}`);
 console.log(`RESULT: ${passed} passed, ${failed} failed`);

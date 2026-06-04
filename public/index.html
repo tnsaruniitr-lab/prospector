@@ -67,7 +67,18 @@
       <svg class="w-5 h-5 text-gray-400 transition-transform" :class="brandOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
     </button>
     <div x-show="brandOpen" x-cloak class="px-6 pb-6 border-t space-y-4">
-      <p class="text-sm text-gray-500 pt-4">Tell us about your business so results are ranked and pitched specifically for you.</p>
+      <!-- Website-first: paste your site, we detect what you sell -->
+      <div class="pt-4">
+        <label class="block text-xs font-medium text-gray-700 mb-1">Paste your website — we'll detect what you sell</label>
+        <div class="flex gap-2">
+          <input x-model="brandUrl" @keydown.enter="detectFromUrl()" type="text" placeholder="e.g. answermonk.com" class="flex-1 border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+          <button @click="detectFromUrl()" :disabled="detecting" class="bg-gray-900 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap">
+            <span x-show="!detecting">✨ Detect</span><span x-show="detecting">Detecting…</span>
+          </button>
+        </div>
+        <p x-show="detectMsg" x-cloak class="text-xs mt-1" :class="detectOk ? 'text-green-600' : 'text-amber-600'" x-text="detectMsg"></p>
+      </div>
+      <p class="text-xs text-gray-400">— or fill it in manually below —</p>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label class="block text-xs font-medium text-gray-700 mb-1">Your brand / studio name</label>
@@ -243,6 +254,10 @@ function app() {
     brandOpen: true,
     brandSaved: false,
     brand: { seller_name: "", offer: "", value_prop: "", fixes: "" },
+    brandUrl: "",
+    detecting: false,
+    detectMsg: "",
+    detectOk: false,
     research: { persona: "ai_search_visibility", category: "med spa", city: "Berlin, Germany", limit: "1" },
     personas: [],
     plan: null,
@@ -260,6 +275,33 @@ function app() {
       this.loadPersonas();
       this.connectWS();
       setInterval(() => this.pollAgent(), 5000);
+    },
+
+    // Website-first onboarding: detect persona + offer from the seller's own site.
+    async detectFromUrl() {
+      if (!this.brandUrl.trim()) return;
+      this.detecting = true; this.detectMsg = ""; this.detectOk = false;
+      try {
+        const r = await fetch(`${SERVER}/api/infer`, {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ url: this.brandUrl }),
+        });
+        const d = await r.json();
+        if (d.error) { this.detectMsg = `Couldn't read that site (${d.error}). Fill it in manually.`; this.detectOk = false; }
+        else if (!d.personaId) { this.detectMsg = "Site read, but couldn't confidently detect what you sell — pick a persona below."; this.detectOk = false; }
+        else {
+          // pre-fill persona + brand fields (proposer/disposer — user can still edit)
+          this.research.persona = d.personaId;
+          const p = this.personas.find(x => x.id === d.personaId);
+          this.brand.seller_name = this.brand.seller_name || (d.title || "").split(/[-|–]/)[0].trim();
+          this.brand.offer = d.suggestedOffer || (p ? p.offer : this.brand.offer);
+          await this.previewPlan();
+          const conf = Math.round((d.confidence || 0) * 100);
+          this.detectMsg = `Detected: ${p ? p.name : d.personaId} (${conf}% confidence). Edit anything below, then run.`;
+          this.detectOk = true;
+        }
+      } catch (e) { this.detectMsg = "Detection failed — fill it in manually."; this.detectOk = false; }
+      this.detecting = false;
     },
 
     async loadPersonas() {
