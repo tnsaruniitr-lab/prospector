@@ -26,18 +26,26 @@ const LOCAL_BRIDGE = `ws://localhost:${LOCAL_PORT}/ws`;
 // Fixed token for local mode — browser and agent always agree without coordination.
 // Override with AGENT_TOKEN env var if you want a different one.
 const AGENT_TOKEN = process.env.AGENT_TOKEN || "local";
+
+// Run mode: published package runs compiled .js with node; the repo runs .ts with tsx.
+const IS_COMPILED = fileURLToPath(import.meta.url).endsWith(".js");
+const EXT = IS_COMPILED ? "js" : "ts";
 const TSX = resolve(__dir, "..", "node_modules", ".bin", "tsx");
+
+// Spawn a sibling entry (server/agent) using the right runtime for the mode.
+function runChild(name: "server" | "agent", env: NodeJS.ProcessEnv) {
+  const target = resolve(__dir, `${name}.${EXT}`);
+  return IS_COMPILED
+    ? spawn(process.execPath, [target], { stdio: "inherit", env })
+    : spawn(TSX, [target], { stdio: "inherit", env });
+}
 
 console.log(`\n🚀 Prospect Engine v${PKG.version} — local mode`);
 console.log(`   Server:  http://localhost:${LOCAL_PORT}/app`);
 console.log(`   DB:      ${process.env.DATABASE_URL ? "Railway Postgres ✓" : "⚠ DATABASE_URL not set"}\n`);
 
 // ── Start server ──────────────────────────────────────────────────────────
-const server = spawn(TSX, [resolve(__dir, "server.ts")], {
-  stdio: "inherit",
-  env: { ...process.env, PORT: String(LOCAL_PORT) },
-});
-
+const server = runChild("server", { ...process.env, PORT: String(LOCAL_PORT) });
 server.on("error", (e) => { console.error("[start] server failed:", e.message); process.exit(1); });
 
 // ── Wait for server to be ready, then start agent ─────────────────────────
@@ -58,11 +66,7 @@ if (!ready) { console.error("[start] server didn't start in 15s"); process.exit(
 console.log("[start] ✅ Server ready\n");
 
 // ── Start agent ────────────────────────────────────────────────────────────
-const agent = spawn(TSX, [resolve(__dir, "agent.ts")], {
-  stdio: "inherit",
-  env: { ...process.env, BRIDGE_URL: LOCAL_BRIDGE, AGENT_TOKEN },
-});
-
+const agent = runChild("agent", { ...process.env, BRIDGE_URL: LOCAL_BRIDGE, AGENT_TOKEN });
 agent.on("error", (e) => console.error("[start] agent error:", e.message));
 
 // ── Open browser ───────────────────────────────────────────────────────────

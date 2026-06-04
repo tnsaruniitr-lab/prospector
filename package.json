@@ -2,12 +2,29 @@
   "name": "prospect-engine",
   "version": "0.1.0",
   "type": "module",
-  "private": true,
-  "description": "Audit-led outbound: discover local-service businesses by ICP+geo, cheap-audit each for SEO/AEO pain, rank, and emit a hand-worked outreach worklist.",
+  "description": "Audit-led outbound: discover local-service businesses by ICP+geo, deep-research each (rendered AEO/SEO audit + SEMrush AI visibility + LinkedIn founder), rank, and emit a structured outreach worklist. Browser-first, no data API keys.",
+  "license": "MIT",
+  "bin": {
+    "prospect-engine": "bin/cli.js"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "src",
+    "public",
+    "migrations",
+    ".claude",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node dist/server.js",
     "start:local": "tsx src/start-local.ts",
     "connect": "tsx src/agent.ts",
+    "prepare": "tsc",
+    "prepublishOnly": "tsc",
     "migrate": "tsx src/migrate.ts",
     "source": "tsx src/cli.ts source",
     "audit": "tsx src/cli.ts audit",
@@ -27,6 +44,7 @@
   "dependencies": {
     "dotenv": "^16.4.0",
     "pg": "^8.13.0",
+    "tsx": "^4.19.0",
     "uuid": "^14.0.0",
     "ws": "^8.21.0",
     "zod": "^3.24.0"
@@ -36,7 +54,6 @@
     "@types/pg": "^8.11.0",
     "@types/uuid": "^11.0.0",
     "@types/ws": "^8.18.1",
-    "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   }
 }

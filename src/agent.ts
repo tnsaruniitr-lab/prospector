@@ -16,13 +16,16 @@ import { fileURLToPath } from "node:url";
 import { readFileSync, existsSync } from "node:fs";
 
 const __dir = dirname(fileURLToPath(import.meta.url));
-const PKG = JSON.parse(readFileSync(resolve(__dir, "..", "package.json"), "utf-8"));
+// Package root: parent of src/ (dev via tsx) or dist/ (published). Claude runs
+// here so it finds .claude/skills/research-prospect + the research helper code.
+const PKG_ROOT = resolve(__dir, "..");
+const PKG = JSON.parse(readFileSync(resolve(PKG_ROOT, "package.json"), "utf-8"));
 
 // Default to localhost for local mode. Set BRIDGE_URL env var to connect to a hosted server:
 //   BRIDGE_URL=wss://your-railway-url/ws npx prospect-engine connect
 const BRIDGE_URL = process.env.BRIDGE_URL || "ws://localhost:3000/ws";
 const AGENT_TOKEN = process.env.AGENT_TOKEN || process.env.npm_config_token || "";
-const SKILL_PATH = resolve(__dir, "..", ".claude", "skills", "research-prospect", "SKILL.md");
+const SKILL_PATH = resolve(PKG_ROOT, ".claude", "skills", "research-prospect", "SKILL.md");
 
 if (!AGENT_TOKEN) {
   console.error(`
@@ -47,7 +50,10 @@ function invokeClaudeCode(prompt: string, onProgress: (stage: string, detail: st
     const args = ["--print", "--no-conversation", prompt];
     console.log(`[agent] spawning: claude ${args.slice(0, 2).join(" ")} ...`);
 
+    // cwd = package root so Claude finds the skill + research code regardless of
+    // where the user launched `prospect-engine connect` from.
     const proc = spawn("claude", args, {
+      cwd: existsSync(SKILL_PATH) ? PKG_ROOT : process.cwd(),
       stdio: ["inherit", "pipe", "pipe"],
       env: { ...process.env },
     });
