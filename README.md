@@ -4,6 +4,8 @@
 
 **Browser-first, zero API keys for data.** All discovery and research uses your authenticated SEMrush + LinkedIn sessions via the Claude in Chrome MCP — no Places API, no Apollo, no data subscriptions beyond what you already have.
 
+**Joining an existing setup?** → See [`docs/collaborator-setup.md`](docs/collaborator-setup.md) — get running in 15 minutes with a shared Railway DB.
+
 ---
 
 ## What it produces
