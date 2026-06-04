@@ -23,7 +23,9 @@ const PKG = JSON.parse(readFileSync(resolve(__dir, "..", "package.json"), "utf-8
 
 const LOCAL_PORT = Number(process.env.PORT) || 3000;
 const LOCAL_BRIDGE = `ws://localhost:${LOCAL_PORT}/ws`;
-const AGENT_TOKEN = process.env.AGENT_TOKEN || "local-" + Math.random().toString(36).slice(2, 8);
+// Fixed token for local mode — browser and agent always agree without coordination.
+// Override with AGENT_TOKEN env var if you want a different one.
+const AGENT_TOKEN = process.env.AGENT_TOKEN || "local";
 const TSX = resolve(__dir, "..", "node_modules", ".bin", "tsx");
 
 console.log(`\n🚀 Prospect Engine v${PKG.version} — local mode`);

@@ -208,7 +208,11 @@ const SERVER = window.location.origin;
 
 function app() {
   return {
-    agentToken: localStorage.getItem("agentToken") || crypto.randomUUID().slice(0, 16),
+    // Local mode uses fixed token "local" so browser + agent always match.
+    // Hosted mode uses a UUID stored in localStorage (unique per user).
+    agentToken: window.location.hostname === "localhost"
+      ? "local"
+      : (localStorage.getItem("agentToken") || crypto.randomUUID().slice(0, 16)),
     agentConnected: false,
     brandOpen: true,
     brandSaved: false,
