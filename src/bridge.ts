@@ -22,6 +22,9 @@ export interface ResearchTask {
   city: string;
   limit?: number;
   sellerProfile?: Record<string, unknown>;
+  // v2: the full configurable Research Plan (persona + sources + signals + contact).
+  // When present, the agent writes it to research-plan.json and the skill runs it.
+  researchPlan?: Record<string, unknown>;
 }
 
 interface AgentConn {
@@ -115,6 +118,7 @@ export function attachBridge(httpServer: import("http").Server) {
           category, city,
           limit: Number(msg.limit || 1),
           sellerProfile: (msg.sellerProfile as Record<string, unknown>) || {},
+          researchPlan: (msg.researchPlan as Record<string, unknown>) || undefined,
         };
         await persistTask(task, "queued");
         send(ws, { type: "queued", taskId: task.taskId });

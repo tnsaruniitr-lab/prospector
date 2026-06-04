@@ -6,6 +6,8 @@ import { paths } from "./config.js";
 import { attachBridge, getAgentStatus } from "./bridge.js";
 import { scoreRelevance } from "./relevance.js";
 import { flattenDossier } from "./dossier.js";
+import { listPersonas, scaffoldPlan } from "./personas.js";
+import { safeParseResearchPlan } from "./research-plan.js";
 
 // Railway entrypoint. Applies migrations on boot, serves the web UI + REST API
 // + WebSocket bridge so local research agents can connect from any machine.
@@ -93,6 +95,34 @@ const httpServer = http.createServer(async (req, res) => {
   if (url.startsWith("/api/agent/") && method === "GET") {
     const token = url.split("/api/agent/")[1];
     json(res, getAgentStatus(token));
+    return;
+  }
+
+  // ── v2: personas (for the picker) ─────────────────────────────────────────
+  if (url.startsWith("/api/personas") && method === "GET") {
+    json(res, listPersonas().map((p) => ({
+      id: p.id, name: p.name, offer: p.offer,
+      defaultResearchSources: p.defaultResearchSources,
+      defaultContactSource: p.defaultContactSource,
+    })));
+    return;
+  }
+
+  // ── v2: scaffold a Research Plan from persona + who + where ────────────────
+  if (url === "/api/scaffold" && method === "POST") {
+    const body = (await readBody(req)) as { persona?: string; vertical?: string; region?: string };
+    if (!body.persona || !body.vertical || !body.region) {
+      json(res, { error: "persona, vertical, region required" }, 400);
+      return;
+    }
+    try {
+      const plan = scaffoldPlan(body.persona, body.vertical, body.region);
+      const v = safeParseResearchPlan(plan); // self-check the scaffold validates
+      if (!v.success) { json(res, { error: "scaffold invalid", issues: v.error.issues }, 500); return; }
+      json(res, plan);
+    } catch (e) {
+      json(res, { error: e instanceof Error ? e.message : String(e) }, 400);
+    }
     return;
   }
 
