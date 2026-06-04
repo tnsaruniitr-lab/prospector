@@ -1,0 +1,148 @@
+/**
+ * Accuracy test suite for the configurable engine.
+ * Run: npx tsx src/test-configurable.ts
+ *
+ * Clear, named test cases auditing:
+ *   - Phase 0 schema (validation + no-keys guard)
+ *   - Phase 1 scaffolding (persona → correct sources, generalization)
+ *   - Relevance v2 (sweet-spot scale, composite capacity, disqualifiers,
+ *     timing, persona weighting, reachability, tiers, rationale)
+ *
+ * Maps to the UATs in docs/configurable-sources-design.md.
+ */
+
+import { parseResearchPlan, safeParseResearchPlan, assertNoCredentials, ResearchPlanSchema } from "./research-plan.js";
+import { scaffoldPlan, getPersona, PERSONAS } from "./personas.js";
+import { scoreRelevanceV2, type RelevanceInput } from "./relevance-v2.js";
+
+let passed = 0, failed = 0;
+const fails: string[] = [];
+function check(name: string, cond: boolean, detail = "") {
+  if (cond) { passed++; console.log(`  ✅ ${name}`); }
+  else { failed++; fails.push(name); console.log(`  ❌ ${name}  ${detail}`); }
+}
+function section(s: string) { console.log(`\n── ${s} ──`); }
+
+const ai = getPersona("ai_search_visibility")!;
+const web = getPersona("web_redesign")!;
+const rec = getPersona("recruiting")!;
+
+// ═══ PHASE 0 — schema ════════════════════════════════════════════════════════
+section("Phase 0 — Research Plan schema");
+{
+  const plan = scaffoldPlan("ai_search_visibility", "med_spa", "Berlin");
+  const v = safeParseResearchPlan(plan);
+  check("scaffolded plan validates against schema", v.success, v.success ? "" : JSON.stringify(v.error.issues));
+
+  let threw = false;
+  try { assertNoCredentials({ sellerPersona: "x", apiKey: "sk-123" }); } catch { threw = true; }
+  check("no-credentials guard throws on apiKey", threw);
+
+  const empty = safeParseResearchPlan({ sellerPersona: "x", prospectVertical: "y", region: "z", researchSources: [], contactSource: { type: "linkedin" } });
+  check("empty researchSources rejected", !empty.success);
+}
+
+// ═══ PHASE 1 — scaffolding + generalization ══════════════════════════════════
+section("Phase 1 — Scaffolding (persona → sources)");
+{
+  const aiPlan = scaffoldPlan("ai_search_visibility", "med_spa", "Berlin");
+  const aiTypes = aiPlan.researchSources.map(s => s.type);
+  check("T1.1 AI-search → semrush_ai + onpage_audit + google_maps",
+    aiTypes.includes("semrush_ai") && aiTypes.includes("onpage_audit") && aiTypes.includes("google_maps"),
+    aiTypes.join(","));
+
+  const webPlan = scaffoldPlan("web_redesign", "med_spa", "Berlin");
+  const webTypes = webPlan.researchSources.map(s => s.type);
+  check("T1.2 web_redesign → pagespeed + onpage_audit, NO semrush_ai (generalization)",
+    webTypes.includes("pagespeed") && !webTypes.includes("semrush_ai"),
+    webTypes.join(","));
+
+  const recPlan = scaffoldPlan("recruiting", "med_spa", "Berlin");
+  const recTypes = recPlan.researchSources.map(s => s.type);
+  check("T1.3 recruiting → linkedin_company, NO semrush at all",
+    recTypes.includes("linkedin_company") && !recTypes.some(t => t.startsWith("semrush")),
+    recTypes.join(","));
+
+  check("T1.4 same input, different persona → different source sets",
+    JSON.stringify(aiTypes) !== JSON.stringify(webTypes));
+
+  const fields = aiPlan.outputFields;
+  check("T1.5 output fields derived + every field traces to a signal/identity/contact/synthesis",
+    fields.length > 0 && fields.every(f => f.fromSignal && f.group));
+
+  let threw = false;
+  try { scaffoldPlan("nonexistent_persona", "x", "y"); } catch { threw = true; }
+  check("T1.6 unknown persona throws", threw);
+}
+
+// ═══ RELEVANCE V2 — accuracy ═════════════════════════════════════════════════
+section("Relevance v2 — accuracy");
+{
+  // T2.1 SWEET SPOT — ideal size scores higher on `scale` than too-big
+  const idealSize: RelevanceInput = { vertical: "med_spa", hasWebsite: true, painGaps: 3, reviewCount: 200 };
+  const tooBig: RelevanceInput = { vertical: "med_spa", hasWebsite: true, painGaps: 3, reviewCount: 100000 };
+  const rIdeal = scoreRelevanceV2(idealSize, ai);
+  const rBig = scoreRelevanceV2(tooBig, ai);
+  check("T2.1 sweet-spot: ideal size scale > too-big scale (NOT bigger=better)",
+    rIdeal.scale > rBig.scale, `ideal=${rIdeal.scale} big=${rBig.scale}`);
+
+  // T2.2 COMPOSITE CAPACITY — richer proxies beat reviews alone
+  const base: RelevanceInput = { vertical: "med_spa", hasWebsite: true, painGaps: 2, reviewCount: 100 };
+  const rich: RelevanceInput = { ...base, runningAds: true, pricingTier: "premium", funding: "funded" };
+  const rBase = scoreRelevanceV2(base, ai);
+  const rRich = scoreRelevanceV2(rich, ai);
+  check("T2.2 composite capacity: ads+premium+funded > reviews alone",
+    rRich.capacity > rBase.capacity, `base=${rBase.capacity} rich=${rRich.capacity}`);
+
+  // T2.3 DISQUALIFIER — no website kills it regardless of strong signals
+  const noSite: RelevanceInput = { vertical: "med_spa", hasWebsite: false, painGaps: 4, reviewCount: 5000, verifiedFounder: true, founderEmail: true, runningAds: true };
+  const rNoSite = scoreRelevanceV2(noSite, web);
+  check("T2.3 disqualifier: no_website → not_relevant + score≤20 despite strong signals",
+    rNoSite.tier === "not_relevant" && rNoSite.disqualified && rNoSite.score <= 20,
+    `tier=${rNoSite.tier} score=${rNoSite.score}`);
+
+  // T2.4 TIMING — triggers raise the score
+  const noTrigger: RelevanceInput = { vertical: "med_spa", hasWebsite: true, painGaps: 2, reviewCount: 200, verifiedFounder: true };
+  const withTrigger: RelevanceInput = { ...noTrigger, trafficDeclining: true, competitorDelta: 3 };
+  const rNo = scoreRelevanceV2(noTrigger, ai);
+  const rYes = scoreRelevanceV2(withTrigger, ai);
+  check("T2.4 timing: 'why now' triggers raise timing AND total score",
+    rYes.timing > rNo.timing && rYes.score > rNo.score,
+    `timing ${rNo.timing}→${rYes.timing}, score ${rNo.score}→${rYes.score}`);
+
+  // T2.5 PERSONA WEIGHTING — same input, different persona → different score
+  const shared: RelevanceInput = { vertical: "med_spa", hasWebsite: true, painGaps: 3, reviewCount: 200, headcount: 50, hiring: true, verifiedFounder: true, founderEmail: true };
+  const sAi = scoreRelevanceV2(shared, ai);
+  const sRec = scoreRelevanceV2(shared, rec);
+  check("T2.5 persona weighting: identical input → different score per persona",
+    sAi.score !== sRec.score, `ai=${sAi.score} rec=${sRec.score}`);
+
+  // T2.6 REACHABILITY — verified founder+email vs nothing
+  const reachable = scoreRelevanceV2({ vertical: "med_spa", hasWebsite: true, painGaps: 2, verifiedFounder: true, founderEmail: true }, ai);
+  const unreachable = scoreRelevanceV2({ vertical: "med_spa", hasWebsite: true, painGaps: 2 }, ai);
+  check("T2.6 reachability: founder+email=100, none=10",
+    reachable.reachable === 100 && unreachable.reachable === 10,
+    `reach=${reachable.reachable} none=${unreachable.reachable}`);
+
+  // T2.7 TIERS — strong → highly, weak → not, middling → moderate
+  const strong = scoreRelevanceV2({ vertical: "med_spa", hasWebsite: true, painGaps: 4, reviewCount: 400, runningAds: true, pricingTier: "premium", verifiedFounder: true, founderEmail: true, trafficDeclining: true, competitorDelta: 3 }, ai);
+  const weak = scoreRelevanceV2({ vertical: "med_spa", hasWebsite: true, painGaps: 0, reviewCount: 3 }, ai);
+  check("T2.7a strong all-round prospect → highly_relevant", strong.tier === "highly_relevant", `score=${strong.score}`);
+  check("T2.7b weak prospect → not_relevant", weak.tier === "not_relevant", `score=${weak.score}`);
+
+  // T2.8 RATIONALE — non-empty, reflects tier
+  check("T2.8 rationale present + names the tier",
+    strong.rationale.includes("HIGHLY") && rNoSite.rationale.toLowerCase().includes("disqualified"),
+    `"${strong.rationale}"`);
+
+  // T2.9 already-dominant disqualifier
+  const dominant = scoreRelevanceV2({ vertical: "med_spa", hasWebsite: true, painGaps: 1, reviewCount: 500, alreadyDominant: true }, ai);
+  check("T2.9 already_ai_dominant → not_relevant (the thing you'd sell is done)",
+    dominant.tier === "not_relevant" && dominant.disqualified);
+}
+
+// ═══ summary ═════════════════════════════════════════════════════════════════
+console.log(`\n${"═".repeat(50)}`);
+console.log(`RESULT: ${passed} passed, ${failed} failed`);
+if (failed) { console.log(`FAILED: ${fails.join(", ")}`); process.exit(1); }
+console.log("All accuracy checks passed ✅");
