@@ -142,6 +142,47 @@ section("Relevance v2 — accuracy");
 }
 
 // ═══ summary ═════════════════════════════════════════════════════════════════
+// ═══ PHASE 2 — plan-aware gate ═══
+section("Phase 2 — Plan-aware gate");
+{
+  const { checkPlanComplete } = await import("./plan-gate.js");
+
+  // U2 — web_redesign plan (no SEMrush AI): dossier with audit+pagespeed + thin SEO note → PASSES
+  const webPlan = scaffoldPlan("web_redesign", "med_spa", "Berlin");
+  const webDossier = {
+    audit: { schemaTypes: ["WebSite"], pagespeed: { performance_score: 38 } },
+    competitive: { thin: true },
+    contacts: { founder: { name: "x" } },
+  };
+  const gWeb = checkPlanComplete(webDossier, webPlan);
+  check("T3.1 (U2) web plan, no SEMrush AI module → gate PASSES (demands only enabled)",
+    gWeb.complete, `missing=${gWeb.missing.join(",")}`);
+
+  // Gate FAILS when an enabled source is silently missing
+  const aiPlan = scaffoldPlan("ai_search_visibility", "med_spa", "Berlin");
+  const incomplete = { audit: { schemaTypes: ["WebSite"] }, competitive: null, contacts: { founder: { name: "x" } } };
+  const gBad = checkPlanComplete(incomplete, aiPlan);
+  check("T3.2 gate FAILS when enabled source (semrush_ai) silently missing",
+    !gBad.complete && gBad.missing.some(m => m.includes("semrush_ai")), gBad.missing.join(","));
+
+  // Noted absence (thin) accepted — golden rule
+  const noted = { audit: { schemaTypes: ["WebSite"] }, competitive: { thin: true }, googleRating: 4.8, contacts: { founder: { name: "x" } } };
+  check("T3.3 noted absence (competitive.thin) accepted (golden rule)",
+    checkPlanComplete(noted, aiPlan).complete);
+
+  // Contact: missing+no note → fail; explicit note → pass
+  const noContact = { audit: { schemaTypes: ["x"] }, competitive: { thin: true }, googleRating: 4.8, contacts: null };
+  check("T3.4 enabled contact missing + no note → gate FAILS", !checkPlanComplete(noContact, aiPlan).complete);
+  const notedContact = { ...noContact, contacts: { ownerNotPublicNote: "no public owner" } };
+  check("T3.5 explicit 'owner not public' note → gate PASSES", checkPlanComplete(notedContact, aiPlan).complete);
+
+  // Disabled source NOT demanded
+  const planDisabled = { ...aiPlan, researchSources: aiPlan.researchSources.map(s => s.type === "semrush_ai" ? { ...s, enabled: false } : s) };
+  check("T3.6 disabled source NOT demanded by the gate",
+    !checkPlanComplete(incomplete, planDisabled).missing.some(m => m.includes("semrush_ai")));
+}
+
+// ═══ summary ═══
 console.log(`\n${"═".repeat(50)}`);
 console.log(`RESULT: ${passed} passed, ${failed} failed`);
 if (failed) { console.log(`FAILED: ${fails.join(", ")}`); process.exit(1); }
