@@ -6,6 +6,7 @@
   "description": "Audit-led outbound: discover local-service businesses by ICP+geo, cheap-audit each for SEO/AEO pain, rank, and emit a hand-worked outreach worklist.",
   "scripts": {
     "start": "node dist/server.js",
+    "start:local": "tsx src/start-local.ts",
     "connect": "tsx src/agent.ts",
     "migrate": "tsx src/migrate.ts",
     "source": "tsx src/cli.ts source",

@@ -18,7 +18,9 @@ import { readFileSync, existsSync } from "node:fs";
 const __dir = dirname(fileURLToPath(import.meta.url));
 const PKG = JSON.parse(readFileSync(resolve(__dir, "..", "package.json"), "utf-8"));
 
-const BRIDGE_URL = process.env.BRIDGE_URL || "wss://prospect-engine.up.railway.app/ws";
+// Default to localhost for local mode. Set BRIDGE_URL env var to connect to a hosted server:
+//   BRIDGE_URL=wss://your-railway-url/ws npx prospect-engine connect
+const BRIDGE_URL = process.env.BRIDGE_URL || "ws://localhost:3000/ws";
 const AGENT_TOKEN = process.env.AGENT_TOKEN || process.env.npm_config_token || "";
 const SKILL_PATH = resolve(__dir, "..", ".claude", "skills", "research-prospect", "SKILL.md");
 

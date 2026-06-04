@@ -81,7 +81,23 @@ These are the only two accounts the tool uses for data. No other logins needed.
 
 ---
 
-## Step 6 — Run your first prospect
+## Step 6 — Choose your mode
+
+### Mode A — Fully local (everything on your machine)
+```bash
+pnpm start:local
+# Starts server + agent together, opens localhost:3000/app automatically
+# No BRIDGE_URL or AGENT_TOKEN needed
+```
+
+### Mode B — Connect to a shared hosted server
+```bash
+BRIDGE_URL=wss://your-railway-url/ws AGENT_TOKEN=your-token pnpm connect
+# Agent connects to the hosted server, web UI at the Railway URL
+# Multiple people can share the same hosted server + DB
+```
+
+## Step 7 — Run your first prospect
 
 Open Claude Code in the project folder:
 ```bash
