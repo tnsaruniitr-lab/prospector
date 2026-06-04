@@ -51,6 +51,22 @@ async function migrateBridgeTasks() {
     )`).catch(() => {});
   // v2: remember the selected persona with the brand (added after the table existed).
   await pool.query(`alter table prospect.seller_profiles add column if not exists persona text`).catch(() => {});
+  // v2: the local request queue — the bridge between the web UI and the user's
+  // own local Claude. Web writes a 'pending' request; the local Claude drains it
+  // (reads pending → does the work with its tools → writes the result). No key,
+  // no spawned CLI — it's the conversational Claude already running locally.
+  await pool.query(`
+    create table if not exists prospect.requests (
+      id          text primary key default gen_random_uuid()::text,
+      agent_token text not null,
+      type        text not null,             -- 'infer' | 'research'
+      payload     jsonb not null default '{}',
+      status      text not null default 'pending',  -- pending|processing|done|error
+      result      jsonb,
+      error       text,
+      created_at  timestamptz default now(),
+      updated_at  timestamptz default now()
+    )`).catch(() => {});
 }
 
 function json(res: http.ServerResponse, data: unknown, status = 200) {
@@ -121,6 +137,28 @@ const httpServer = http.createServer(async (req, res) => {
     } catch (e) {
       json(res, { error: e instanceof Error ? e.message : String(e) }, 400);
     }
+    return;
+  }
+
+  // ── v2: request queue — web enqueues, local Claude drains ─────────────────
+  if (url === "/api/request" && method === "POST") {
+    const body = (await readBody(req)) as { agent_token?: string; type?: string; payload?: unknown };
+    if (!body.agent_token || !body.type) { json(res, { error: "agent_token + type required" }, 400); return; }
+    try {
+      const r = await pool.query(
+        `insert into prospect.requests (agent_token, type, payload) values ($1,$2,$3::jsonb) returning id`,
+        [body.agent_token, body.type, JSON.stringify(body.payload || {})],
+      );
+      json(res, { id: r.rows[0].id, status: "pending" });
+    } catch (e) { json(res, { error: e instanceof Error ? e.message : String(e) }, 500); }
+    return;
+  }
+
+  // web UI polls this for the result
+  if (url.startsWith("/api/request/") && method === "GET") {
+    const id = url.split("/api/request/")[1].split("?")[0];
+    const r = await pool.query(`select status, result, error from prospect.requests where id=$1`, [id]).catch(() => ({ rows: [] }));
+    json(res, r.rows[0] || { status: "unknown" });
     return;
   }
 

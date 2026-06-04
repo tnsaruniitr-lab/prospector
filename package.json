@@ -23,6 +23,7 @@
     "start": "node dist/server.js",
     "start:local": "tsx src/start-local.ts",
     "connect": "tsx src/agent.ts",
+    "queue": "tsx src/queue.ts",
     "prepare": "tsc",
     "prepublishOnly": "tsc",
     "migrate": "tsx src/migrate.ts",

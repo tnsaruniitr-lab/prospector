@@ -75,6 +75,9 @@
           <button @click="detectFromUrl()" :disabled="detecting" class="bg-gray-900 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap">
             <span x-show="!detecting">✨ Detect</span><span x-show="detecting">Detecting…</span>
           </button>
+          <button @click="askMyClaude()" :disabled="detecting" title="Routes to YOUR local Claude — understands any business, no key" class="bg-indigo-600 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap">
+            🤖 Ask my Claude
+          </button>
         </div>
         <p x-show="detectMsg" x-cloak class="text-xs mt-1" :class="detectOk ? 'text-green-600' : 'text-amber-600'" x-text="detectMsg"></p>
       </div>
@@ -305,6 +308,32 @@ function app() {
       this.detecting = false;
     },
 
+    // Queue an inference for YOUR local Claude (the conversational one) to drain.
+    // No key, no spawned CLI — your own Claude reads the queue and does the work.
+    async askMyClaude() {
+      if (!this.brandUrl.trim()) return;
+      this.detecting = true; this.detectOk = false;
+      this.detectMsg = "Queued for your Claude… in your Claude chat say: “drain the prospect-engine queue”.";
+      try {
+        const enq = await (await fetch(`${SERVER}/api/request`, {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ agent_token: this.agentToken, type: "infer", payload: { url: this.brandUrl } }),
+        })).json();
+        if (enq.error || !enq.id) { this.detectMsg = "Couldn't queue the request."; this.detecting = false; return; }
+        // Poll for the result (your Claude writes it when it drains the queue).
+        const id = enq.id;
+        const started = Date.now();
+        while (Date.now() - started < 5 * 60 * 1000) {
+          await new Promise(r => setTimeout(r, 2500));
+          const st = await (await fetch(`${SERVER}/api/request/${id}`)).json();
+          if (st.status === "done") { this.applyDetect(st.result || {}, "claude"); this.detecting = false; return; }
+          if (st.status === "error") { this.detectMsg = `Your Claude reported: ${st.error || "error"}`; this.detecting = false; return; }
+        }
+        this.detectMsg = "Still waiting on your Claude — leave it; it'll fill in when your Claude drains the queue.";
+      } catch (e) { this.detectMsg = "Queue request failed."; }
+      this.detecting = false;
+    },
+
     // Send an infer task to the agent (user's Claude Code) and await the result.
     detectSmartViaAgent(url) {
       return new Promise((resolve, reject) => {
@@ -320,6 +349,14 @@ function app() {
     applyDetect(d, source) {
       const confident = (d.confident !== undefined) ? d.confident : (!!d.personaId && (d.confidence || 0) >= 0.5);
       const via = source === "claude" ? " (via your Claude)" : "";
+      // BROAD case: Claude understood the business but it fits no preset persona.
+      // Not a rejection — a custom seller. Capture the offer; flag for a tailored plan.
+      if (!d.personaId && d.vertical && (d.confidence || 0) >= 0.6) {
+        if (d.offer) this.brand.offer = d.offer;
+        this.detectMsg = `Understood: ${d.vertical}${via} — no preset fits, so a custom plan would be built. ${d.reasoning || ""}`.slice(0, 170);
+        this.detectOk = true;
+        return;
+      }
       if (!confident) {
         const hint = d.personaId ? ` (weak '${d.personaId}' signal)` : "";
         this.detectMsg = `Read the site, but couldn't confidently tell what you sell${hint}${via} — pick a persona manually below. Your brand was left unchanged.`;
