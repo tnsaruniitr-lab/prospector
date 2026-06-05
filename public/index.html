@@ -545,7 +545,7 @@ function app() {
       // BROAD case: understood, fits no preset → custom seller. Fill everything.
       if (!d.personaId && d.vertical && (d.confidence || 0) >= 0.6) {
         fill();
-        this.brand.persona = "ai_search_visibility"; // default scoring persona for custom verticals
+        this.brand.persona = ""; // custom vertical — output driven by the wedge, NOT the AEO curated set
         if (this.brand.customer_types.length) { this.research.category = this.brand.customer_types[0]; this.previewPlan(); }
         this.detectMsg = `Understood: ${d.vertical}${via} — ${(this.brand.customer_types||[]).length} customer types found. Edit + Save, then research.`.slice(0, 170);
         this.detectOk = true; return;
@@ -601,7 +601,8 @@ function app() {
       try {
         const r = await (await fetch(`${SERVER}/api/output-contract`, {
           method: "POST", headers: { "content-type": "application/json" },
-          body: JSON.stringify({ persona: this.brand.persona || this.research.persona, wedge: this.brand.wedge }),
+          // Use brand.persona ONLY (empty = custom → output uses the wedge, not the AEO curated set)
+          body: JSON.stringify({ persona: this.brand.persona, wedge: this.brand.wedge }),
         })).json();
         this.outputGrouped = r.grouped || {};
         this.outputCount = r.count || 0;
@@ -712,6 +713,7 @@ function app() {
           if (d.persona) this.research.persona = d.persona;
           // Auto-pick the first customer type as the research target
           if (this.brand.customer_types.length) { this.research.category = this.brand.customer_types[0]; await this.previewPlan(); }
+          this.loadOutputContract(); // now that brand + wedge are loaded
         }
       } catch {}
     },
