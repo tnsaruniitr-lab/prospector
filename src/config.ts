@@ -31,6 +31,8 @@ const envSchema = z.object({
   AUDITOR_SCRIPT: z.string().optional(),
   AUDIT_CONCURRENCY: z.coerce.number().int().positive().default(4),
   AUDIT_TIMEOUT_MS: z.coerce.number().int().positive().default(90_000),
+  // Storage destination: local files, Railway Postgres, or both.
+  STORAGE: z.enum(["local", "db", "both"]).default("local"),
 });
 
 const parsed = envSchema.safeParse(process.env);

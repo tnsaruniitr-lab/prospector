@@ -26,13 +26,24 @@ Never fabricate. If a value isn't found, set it to null or an honest note.
 
 ## 3. Connection details
 
-- Railway DB: `DATABASE_URL` from environment (set in `.env` or Claude Code env)
 - Queue tool: `src/queue.ts` — commands: `list | take <id> | done <id> '<json>' | fail <id> '<msg>'`
 - Research skill: `.claude/skills/research-prospect/SKILL.md`
 
-## 4. For new users
+## 4. Storage
 
-If `DATABASE_URL` is not set, say:
+Storage destination is controlled by the `STORAGE` env var:
+
+- **Default (no setup):** `STORAGE=local` — every researched prospect is saved as a JSON file in `outputs/dossiers/` and appended to `outputs/prospects.csv` and `outputs/prospects.xlsx`. No `DATABASE_URL` required.
+- **Railway Postgres:** `STORAGE=db` — persists to Railway Postgres. Requires `DATABASE_URL` in `.env`.
+- **Both:** `STORAGE=both` — writes local files AND the database simultaneously.
+
+The `recordDossier()` public API is unchanged regardless of storage mode.
+
+## 5. For new users
+
+**Storage (new users, no database):** By default (`STORAGE=local`) every researched prospect is saved as a JSON file in `outputs/dossiers/` and appended to `outputs/prospects.csv` and `outputs/prospects.xlsx` — no `DATABASE_URL` required. Set `STORAGE=db` (and provide `DATABASE_URL`) to persist to Railway Postgres instead, or `STORAGE=both` to write to both simultaneously.
+
+If `DATABASE_URL` is not set and `STORAGE=db` or `STORAGE=both` is configured, say:
 > "To connect to the Prospect Engine database, add DATABASE_URL to your .env file.
 > Get the connection string from the project owner or set up your own Railway Postgres."
 

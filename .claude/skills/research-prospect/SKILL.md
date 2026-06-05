@@ -5,6 +5,11 @@ description: Deep-research one prospect domain into a dossier. Runs a FIXED flow
 
 # Research a prospect → dossier
 
+## Code references
+Extractors: `src/browser/*.js` | Synthesis: `src/synthesis.ts` | Grading: `src/grading.ts`
+Relevance: `src/relevance-v2.ts` | Storage: `src/storage.ts` | Persist: `src/record-dossier.ts`
+Research Plan: `src/research-plan.ts` | Personas: `src/personas.ts` | Queue: `src/queue.ts`
+
 Follow these stages **in order** for the given domain. Each stage has a fixed
 procedure and a validation gate. The deterministic extractors live in
 `src/browser/*.js`; synthesis + persistence are code in `src/`.
@@ -138,9 +143,14 @@ fire, not just schema/AEO. Returns:
   `categoryLeader`'s, both SEMrush-extracted) as an outreach subject line.
 
 ## Stage 5 — Persist  (code)
-Assemble the `Dossier` object (identity + contacts + audit + competitive + synthesis)
-and call `recordDossier()` (`src/record-dossier.ts`) → upserts into Railway Postgres
-(deduped by domain). Run `src/db-check.ts` to confirm the row + contact count.
+Assemble the `Dossier` object (identity + contacts + audit + competitive + synthesis).
+
+Storage is configurable via the `STORAGE` env var:
+- `STORAGE=local` (default, zero-setup): writes to `outputs/dossiers/<domain>.json` + `outputs/prospects.csv`
+- `STORAGE=db`: persists to Railway Postgres (requires `DATABASE_URL`)
+- `STORAGE=both`: both simultaneously
+
+The skill calls `recordDossier()` (`src/record-dossier.ts`) which dispatches to the active adapter(s) automatically. Run `src/db-check.ts` only when `STORAGE=db` or `STORAGE=both`.
 
 ## Stage 6 — Grade  (code)
 Run `gradeDossier()` / `src/grade-all.ts` → priority score (0-100) + tier A/B/C/D
