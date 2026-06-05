@@ -260,6 +260,36 @@ section("LLM path — extract prompt + parser");
   check("T5.7 garbage → null", parseBrandExtract("not json at all") === null);
 }
 
+// ═══ Wedge-finder — prompt + parser + source-tier logic ══════════════════════
+section("Wedge-finder — diagnostic spec");
+{
+  const { buildWedgePrompt, parseWedge, normalizeWedge } = await import("./wedge.js");
+
+  const prompt = buildWedgePrompt({ offer: "AI-search visibility", value_prop: "get cited by ChatGPT", customer_types: ["med spas"] });
+  check("T6.1 prompt includes brand + source ladder + 'measurable'",
+    prompt.includes("AI-search visibility") && prompt.includes("google_reviews") && /measurable/i.test(prompt));
+  check("T6.2 prompt lists LIGHT before HEAVY (prefers light)",
+    prompt.indexOf("google_reviews") < prompt.indexOf("semrush_ai"));
+
+  // all-light sources → tier "light"
+  const light = normalizeWedge({ wedge: "slow site", sources: ["pagespeed", "website", "google_reviews"], pitchFormula: "{score}/100", confidence: 0.8 });
+  check("T6.3 all-light sources → sourceTier 'light'", light.sourceTier === "light", light.sourceTier);
+
+  // needs SEMrush → heavy
+  const heavy = normalizeWedge({ wedge: "invisible in AI", sources: ["semrush_ai", "onpage_audit"], pitchFormula: "{delta}x", confidence: 0.9 });
+  check("T6.4 SEMrush present → sourceTier 'mixed' or 'heavy'", heavy.sourceTier === "mixed", heavy.sourceTier);
+
+  const onlyHeavy = normalizeWedge({ wedge: "x", sources: ["semrush_ai", "linkedin_company"], pitchFormula: "y", confidence: 0.5 });
+  check("T6.5 only-heavy sources → sourceTier 'heavy'", onlyHeavy.sourceTier === "heavy", onlyHeavy.sourceTier);
+
+  // tolerant parse
+  const parsed = parseWedge('```json\n{"wedge":"low rating","provingSignals":[{"signal":"google_rating","meaning":"trust","threshold":"<4.0","source":"google_reviews"}],"sources":["google_reviews"],"pitchFormula":"you are at {rating}","confidence":0.85,"reasoning":"x"}\n```');
+  check("T6.6 parses backticked wedge JSON + 1 proving signal",
+    parsed?.wedge === "low rating" && parsed?.provingSignals.length === 1 && parsed?.sourceTier === "light");
+
+  check("T6.7 garbage → null", parseWedge("nope") === null);
+}
+
 // ═══ summary ═══
 console.log(`\n${"═".repeat(50)}`);
 console.log(`RESULT: ${passed} passed, ${failed} failed`);

@@ -9,6 +9,7 @@ import { flattenDossier } from "./dossier.js";
 import { listPersonas, scaffoldPlan } from "./personas.js";
 import { safeParseResearchPlan } from "./research-plan.js";
 import { inferFromUrl, inferFromUrlLlm } from "./brand-infer.js";
+import { findWedgeLlm } from "./wedge.js";
 
 // Railway entrypoint. Applies migrations on boot, serves the web UI + REST API
 // + WebSocket bridge so local research agents can connect from any machine.
@@ -59,6 +60,8 @@ async function migrateBridgeTasks() {
   await pool.query(`alter table prospect.seller_profiles add column if not exists services jsonb default '[]'`).catch(() => {});
   // v2: ranked contact channels to capture (key + required, in priority order).
   await pool.query(`alter table prospect.seller_profiles add column if not exists contact_channels jsonb default '[]'`).catch(() => {});
+  // v2: the wedge-finder Diagnostic Spec (wedge + signals + sources + pitch).
+  await pool.query(`alter table prospect.seller_profiles add column if not exists wedge jsonb`).catch(() => {});
   // v2: the local request queue — the bridge between the web UI and the user's
   // own local Claude. Web writes a 'pending' request; the local Claude drains it
   // (reads pending → does the work with its tools → writes the result). No key,
@@ -166,6 +169,20 @@ const httpServer = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── v2: wedge-finder — brand → diagnostic spec (wedge + signals + sources + pitch) ─
+  if (url === "/api/wedge" && method === "POST") {
+    const body = (await readBody(req)) as { brand?: Record<string, unknown> };
+    if (!body.brand) { json(res, { error: "brand required" }, 400); return; }
+    try {
+      const spec = await findWedgeLlm(body.brand).catch(() => null);
+      if (spec) { json(res, { ...spec, source: "llm" }); return; }
+      json(res, { needsClaude: true }); // no key → UI queues for local Claude
+    } catch (e) {
+      json(res, { error: e instanceof Error ? e.message : String(e) }, 400);
+    }
+    return;
+  }
+
   // ── v2: request queue — web enqueues, local Claude drains ─────────────────
   if (url === "/api/request" && method === "POST") {
     const body = (await readBody(req)) as { agent_token?: string; type?: string; payload?: unknown };
@@ -217,24 +234,24 @@ const httpServer = http.createServer(async (req, res) => {
   if (url === "/api/brand" && method === "POST") {
     const body = await readBody(req) as Record<string, unknown>;
     const { agent_token, seller_name, offer, value_prop, fixes, target_verticals, min_reviews, persona,
-            icp, customer_types, competitor_hint, suggested_sources, services, contact_channels } = body;
+            icp, customer_types, competitor_hint, suggested_sources, services, contact_channels, wedge } = body;
     if (!agent_token) { json(res, { error: "agent_token required" }, 400); return; }
     try {
       await pool.query(`
         insert into prospect.seller_profiles
           (agent_token, seller_name, offer, value_prop, fixes, target_verticals, min_reviews, persona,
-           icp, customer_types, competitor_hint, suggested_sources, services, contact_channels, updated_at)
-        values ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10::jsonb,$11,$12::jsonb,$13::jsonb,$14::jsonb,now())
+           icp, customer_types, competitor_hint, suggested_sources, services, contact_channels, wedge, updated_at)
+        values ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10::jsonb,$11,$12::jsonb,$13::jsonb,$14::jsonb,$15::jsonb,now())
         on conflict (agent_token) do update set
           seller_name=$2, offer=$3, value_prop=$4, fixes=$5, target_verticals=$6::jsonb,
           min_reviews=$7, persona=$8, icp=$9, customer_types=$10::jsonb,
           competitor_hint=$11, suggested_sources=$12::jsonb, services=$13::jsonb,
-          contact_channels=$14::jsonb, updated_at=now()
+          contact_channels=$14::jsonb, wedge=$15::jsonb, updated_at=now()
       `, [agent_token, seller_name, offer, value_prop, fixes,
           JSON.stringify(target_verticals || []), min_reviews || 25, persona || null,
           icp || null, JSON.stringify(customer_types || []), competitor_hint || null,
           JSON.stringify(suggested_sources || []), JSON.stringify(services || []),
-          JSON.stringify(contact_channels || [])]);
+          JSON.stringify(contact_channels || []), wedge ? JSON.stringify(wedge) : null]);
       json(res, { ok: true });
     } catch (e) {
       json(res, { ok: false, error: e instanceof Error ? e.message : String(e) }, 500);

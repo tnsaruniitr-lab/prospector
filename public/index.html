@@ -119,6 +119,40 @@
           <input x-model="brand.fixes" type="text" placeholder="e.g. add schema + FAQ hub + Person markup" class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
         </div>
       </div>
+
+      <!-- Wedge-finder — the measurable pain + lightest sources + pitch formula -->
+      <div class="border-t pt-4">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-semibold text-gray-800">🎯 Your wedge</h3>
+          <button @click="findWedge()" :disabled="wedgeLoading || !brand.offer" class="bg-emerald-600 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg text-xs font-medium">
+            <span x-show="!wedgeLoading">🎯 Find my wedge</span><span x-show="wedgeLoading">Finding…</span>
+          </button>
+        </div>
+        <p x-show="!brand.wedge" x-cloak class="text-xs text-gray-400">The sharpest measurable pain that proves a prospect needs you — and the lightest data to prove it. (Uses your Claude / the key.)</p>
+        <p x-show="wedgeMsg" x-cloak class="text-xs text-amber-600" x-text="wedgeMsg"></p>
+
+        <div x-show="brand.wedge && brand.wedge.wedge" x-cloak class="bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-2 text-xs">
+          <div><span class="font-semibold text-emerald-800">Wedge:</span> <span x-text="brand.wedge?.wedge"></span></div>
+          <div>
+            <span class="font-semibold text-gray-700">Proves it:</span>
+            <ul class="mt-1 space-y-0.5">
+              <template x-for="s in (brand.wedge?.provingSignals||[])" :key="s.signal">
+                <li class="text-gray-600">• <span class="font-medium" x-text="s.signal"></span> — <span x-text="s.threshold"></span> <span class="text-gray-400" x-text="'(' + s.source + ')'"></span></li>
+              </template>
+            </ul>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="font-semibold text-gray-700">Sources:</span>
+            <template x-for="src in (brand.wedge?.sources||[])" :key="src"><span class="bg-white border rounded px-1.5 py-0.5" x-text="src"></span></template>
+            <span class="rounded-full px-2 py-0.5 text-[10px] font-medium"
+              :class="brand.wedge?.sourceTier === 'light' ? 'bg-green-100 text-green-700' : brand.wedge?.sourceTier === 'mixed' ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'"
+              x-text="brand.wedge?.sourceTier === 'light' ? '🟢 all free, no login' : brand.wedge?.sourceTier === 'mixed' ? '🟡 mostly light' : '🟠 needs login/paid'"></span>
+          </div>
+          <div><span class="font-semibold text-gray-700">Pitch:</span> <span class="italic text-gray-600" x-text="brand.wedge?.pitchFormula"></span></div>
+          <button @click="applyWedgeSources()" class="text-emerald-700 underline">→ Use these sources for research</button>
+        </div>
+      </div>
+
       <!-- Targeting — structured chips, auto-filled by detection, drives research -->
       <div class="border-t pt-4 space-y-3">
         <div class="flex items-center justify-between">
@@ -150,7 +184,7 @@
         <div>
           <label class="block text-xs font-medium text-gray-700 mb-1">Research sources to use</label>
           <div class="flex flex-wrap gap-2">
-            <template x-for="src in ['semrush_ai','semrush_seo','onpage_audit','pagespeed','google_maps','linkedin_company','apollo_browser','custom']" :key="src">
+            <template x-for="src in ['google_search','website','google_reviews','google_maps','onpage_audit','pagespeed','semrush_ai','semrush_seo','linkedin_company','apollo_browser','custom']" :key="src">
               <label class="flex items-center gap-1.5 border rounded-lg px-2.5 py-1 text-xs cursor-pointer"
                 :class="(brand.suggested_sources||[]).includes(src) ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500'">
                 <input type="checkbox" :checked="(brand.suggested_sources||[]).includes(src)"
@@ -371,9 +405,11 @@ function app() {
     brand: { seller_name: "", offer: "", value_prop: "", fixes: "",
              icp: "", customer_types: [], persona: "",
              competitor_hint: "", suggested_sources: [], services: [],
-             contact_channels: JSON.parse(JSON.stringify(DEFAULT_CONTACTS)) },
+             contact_channels: JSON.parse(JSON.stringify(DEFAULT_CONTACTS)), wedge: null },
     newCustomerType: "",
     catalog: CONTACT_CATALOG,
+    wedgeLoading: false,
+    wedgeMsg: "",
     brandUrl: "",
     detecting: false,
     detectMsg: "",
@@ -508,6 +544,35 @@ function app() {
       this.detectOk = true;
     },
 
+    // Find the seller's wedge — server LLM if key, else queue for local Claude.
+    async findWedge() {
+      this.wedgeLoading = true; this.wedgeMsg = "";
+      const brand = { offer: this.brand.offer, value_prop: this.brand.value_prop, fixes: this.brand.fixes, icp: this.brand.icp, customer_types: this.brand.customer_types };
+      try {
+        const r = await (await fetch(`${SERVER}/api/wedge`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ brand }) })).json();
+        if (r.wedge) { this.brand.wedge = r; this.applyWedgeSources(); this.wedgeLoading = false; return; }
+        // no key → queue for local Claude
+        this.wedgeMsg = "Queued for your Claude — it'll fill the wedge shortly.";
+        const enq = await (await fetch(`${SERVER}/api/request`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ agent_token: this.agentToken, type: "wedge", payload: { brand } }) })).json();
+        if (enq.id) {
+          const started = Date.now();
+          while (Date.now() - started < 5 * 60 * 1000) {
+            await new Promise(r2 => setTimeout(r2, 3000));
+            const st = await (await fetch(`${SERVER}/api/request/${enq.id}`)).json();
+            if (st.status === "done") { this.brand.wedge = st.result; this.applyWedgeSources(); this.wedgeMsg = ""; break; }
+            if (st.status === "error") { this.wedgeMsg = "Wedge failed: " + (st.error || ""); break; }
+          }
+        }
+      } catch (e) { this.wedgeMsg = "Wedge request failed."; }
+      this.wedgeLoading = false;
+    },
+
+    // Push the wedge's recommended sources into the research source chips.
+    applyWedgeSources() {
+      const s = this.brand.wedge?.sources;
+      if (Array.isArray(s) && s.length) { this.brand.suggested_sources = [...s]; if (this.plan) this.previewPlan(); }
+    },
+
     moveContact(i, dir) {
       const j = i + dir;
       if (j < 0 || j >= this.brand.contact_channels.length) return;
@@ -607,6 +672,7 @@ function app() {
           this.brand.persona = d.persona || "";
           this.brand.contact_channels = (Array.isArray(d.contact_channels) && d.contact_channels.length)
             ? d.contact_channels : JSON.parse(JSON.stringify(DEFAULT_CONTACTS));
+          this.brand.wedge = d.wedge || null;
           this.brandSaved = true; this.brandOpen = false;
           if (d.persona) this.research.persona = d.persona;
           // Auto-pick the first customer type as the research target
@@ -654,6 +720,8 @@ function app() {
         // Required + nice-to-have contact channels, in ranked order
         this.plan.contactChannels = this.brand.contact_channels;
         this.plan.requiredContacts = this.brand.contact_channels.filter(c => c.required).map(c => c.key);
+        // The wedge — drives the diagnosis + pitch formula
+        if (this.brand.wedge) this.plan.wedge = this.brand.wedge;
       }
 
       const payload = {
