@@ -8,7 +8,7 @@ import { scoreRelevance } from "./relevance.js";
 import { flattenDossier } from "./dossier.js";
 import { listPersonas, scaffoldPlan } from "./personas.js";
 import { safeParseResearchPlan } from "./research-plan.js";
-import { inferFromUrl } from "./brand-infer.js";
+import { inferFromUrl, inferFromUrlLlm } from "./brand-infer.js";
 
 // Railway entrypoint. Applies migrations on boot, serves the web UI + REST API
 // + WebSocket bridge so local research agents can connect from any machine.
@@ -132,8 +132,14 @@ const httpServer = http.createServer(async (req, res) => {
     const body = (await readBody(req)) as { url?: string };
     if (!body.url) { json(res, { error: "url required" }, 400); return; }
     try {
+      // API-call model: if ANTHROPIC_API_KEY is set, the server calls the LLM
+      // synchronously (instant + broad — ANY business + ICP + sources). No key →
+      // null → fall back to the instant keyword matcher. Either way it's one
+      // request → one response. No listen-loop, no queue.
+      const llm = await inferFromUrlLlm(body.url).catch(() => null);
+      if (llm) { json(res, { ...llm, source: "llm" }); return; }
       const result = await inferFromUrl(body.url);
-      json(res, result);
+      json(res, { ...result, source: "keyword" });
     } catch (e) {
       json(res, { error: e instanceof Error ? e.message : String(e) }, 400);
     }

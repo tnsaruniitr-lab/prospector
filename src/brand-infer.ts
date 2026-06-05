@@ -13,6 +13,7 @@
  */
 
 import { getPersona, listPersonas } from "./personas.js";
+import { llmJson } from "./llm.js";
 
 // Keyword signatures per persona (lowercased, matched against site text).
 export const PERSONA_KEYWORDS: Record<string, string[]> = {
@@ -156,8 +157,13 @@ export async function inferFromUrl(rawUrl: string): Promise<InferResult> {
 export interface BrandExtract {
   personaId: string | null; // mapped to the library, or null if none fit
   offer: string;
+  painYouFix: string;       // the pain THEY solve for their customers
+  fixes: string;            // what they actually deliver / do
   services: string[];
   customerTypes: string[];
+  icp: string;              // clear ideal-customer-profile (who to prospect for)
+  competitorHint: string;   // how to find their real competitors
+  suggestedSources: string[]; // which sources to survey: website, linkedin, apollo, semrush_ai, ...
   vertical: string;
   confidence: number; // 0-1, Claude's own
   reasoning: string;
@@ -188,13 +194,41 @@ export function buildBrandExtractPrompt(domain: string, scraped: { title: string
     "Map them to the CLOSEST seller persona from this list, or null if none genuinely fit:",
     personaList,
     "",
+    "Also DEEP-ANALYSE so this drives prospecting: who they should sell to (ICP),",
+    "how to find their real competitors, and which sources to survey.",
+    "Sources to choose from: website, linkedin, apollo, google_maps, semrush_ai, semrush_seo, pagespeed.",
+    "",
     "Return ONLY raw JSON (no markdown, no backticks):",
-    '{"personaId": "<one of the ids above or null>", "offer": "<one sentence, what they sell>",',
-    ' "services": ["<service>", ...], "customerTypes": ["<segment>", ...], "vertical": "<short category>",',
+    '{"personaId": "<one of the ids above or null>", "offer": "<one sentence: what they sell>",',
+    ' "painYouFix": "<the pain THEY solve for their customers>", "fixes": "<what they actually deliver/do>",',
+    ' "services": ["<service>", ...], "customerTypes": ["<segment>", ...],',
+    ' "icp": "<one clear sentence: the ideal customer to prospect FOR this seller>",',
+    ' "competitorHint": "<how to find their real competitors, scoped to their region/vertical>",',
+    ' "suggestedSources": ["<source>", ...], "vertical": "<short category>",',
     ' "confidence": <0..1>, "reasoning": "<one line>"}',
     "",
-    "Rules: personaId must be from the list or null. List every service the text mentions, ranked by prominence — never invent one not in the text. Set confidence < 0.5 if the text is vague or fits no persona.",
+    "Rules: personaId must be from the list or null. List every service the text mentions, ranked by prominence — never invent one not in the text. suggestedSources must come from the allowed list. Set confidence < 0.5 if the text is vague or fits no persona.",
   ].join("\n");
+}
+
+/** Normalize a parsed object → BrandExtract (validates personaId against the library). */
+export function normalizeBrandExtract(obj: Record<string, unknown>): BrandExtract {
+  let personaId = typeof obj.personaId === "string" ? obj.personaId : null;
+  if (personaId && !getPersona(personaId)) personaId = null; // must be a real library persona
+  return {
+    personaId,
+    offer: String(obj.offer ?? ""),
+    painYouFix: String(obj.painYouFix ?? ""),
+    fixes: String(obj.fixes ?? ""),
+    services: Array.isArray(obj.services) ? obj.services.map(String) : [],
+    customerTypes: Array.isArray(obj.customerTypes) ? obj.customerTypes.map(String) : [],
+    icp: String(obj.icp ?? ""),
+    competitorHint: String(obj.competitorHint ?? ""),
+    suggestedSources: Array.isArray(obj.suggestedSources) ? obj.suggestedSources.map(String) : [],
+    vertical: String(obj.vertical ?? ""),
+    confidence: typeof obj.confidence === "number" ? Math.max(0, Math.min(1, obj.confidence)) : 0,
+    reasoning: String(obj.reasoning ?? ""),
+  };
 }
 
 /** Tolerant parser — strips backticks/prose, validates personaId against the library. */
@@ -205,18 +239,18 @@ export function parseBrandExtract(raw: string): BrandExtract | null {
   const end = s.lastIndexOf("}");
   if (start === -1 || end === -1) return null;
   s = s.slice(start, end + 1);
-  let obj: Record<string, unknown>;
-  try { obj = JSON.parse(s); } catch { return null; }
+  try { return normalizeBrandExtract(JSON.parse(s)); } catch { return null; }
+}
 
-  let personaId = typeof obj.personaId === "string" ? obj.personaId : null;
-  if (personaId && !getPersona(personaId)) personaId = null; // must be a real library persona
-  return {
-    personaId,
-    offer: String(obj.offer ?? ""),
-    services: Array.isArray(obj.services) ? obj.services.map(String) : [],
-    customerTypes: Array.isArray(obj.customerTypes) ? obj.customerTypes.map(String) : [],
-    vertical: String(obj.vertical ?? ""),
-    confidence: typeof obj.confidence === "number" ? Math.max(0, Math.min(1, obj.confidence)) : 0,
-    reasoning: String(obj.reasoning ?? ""),
-  };
+/**
+ * Server-side LLM inference — instant + broad, runs ONLY if ANTHROPIC_API_KEY is
+ * set (llmJson returns null otherwise). This is what makes the Detect button
+ * automatic + any-business. No key → returns null → caller falls back to keyword.
+ */
+export async function inferFromUrlLlm(rawUrl: string): Promise<(BrandExtract & { title: string; description: string }) | null> {
+  const scraped = await fetchAndExtract(rawUrl);
+  const prompt = buildBrandExtractPrompt(rawUrl, scraped);
+  const obj = await llmJson<Record<string, unknown>>(prompt, { maxTokens: 700 });
+  if (!obj) return null; // no key, or the call failed
+  return { ...normalizeBrandExtract(obj), title: scraped.title, description: scraped.description };
 }

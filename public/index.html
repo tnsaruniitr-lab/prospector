@@ -349,23 +349,28 @@ function app() {
     applyDetect(d, source) {
       const confident = (d.confident !== undefined) ? d.confident : (!!d.personaId && (d.confidence || 0) >= 0.5);
       const via = source === "claude" ? " (via your Claude)" : "";
-      // BROAD case: Claude understood the business but it fits no preset persona.
-      // Not a rejection — a custom seller. Capture the offer; flag for a tailored plan.
+      const p = d.personaId ? this.personas.find(x => x.id === d.personaId) : null;
+      // Populate ALL brand fields from whatever the detection gave us.
+      const fill = () => {
+        if (d.title) this.brand.seller_name = String(d.title).split(/[-|–:]/)[0].trim();
+        this.brand.offer = d.offer || d.suggestedOffer || (p ? p.offer : this.brand.offer);
+        this.brand.value_prop = d.painYouFix || (p ? p.valueProp : this.brand.value_prop) || "";
+        this.brand.fixes = d.fixes || (Array.isArray(d.services) && d.services.length ? d.services.join(", ") : (p ? p.fixes : this.brand.fixes)) || "";
+      };
+      // BROAD case: understood, fits no preset → custom seller. Fill everything.
       if (!d.personaId && d.vertical && (d.confidence || 0) >= 0.6) {
-        if (d.offer) this.brand.offer = d.offer;
+        fill();
         this.detectMsg = `Understood: ${d.vertical}${via} — no preset fits, so a custom plan would be built. ${d.reasoning || ""}`.slice(0, 170);
-        this.detectOk = true;
-        return;
+        this.detectOk = true; return;
       }
       if (!confident) {
         const hint = d.personaId ? ` (weak '${d.personaId}' signal)` : "";
         this.detectMsg = `Read the site, but couldn't confidently tell what you sell${hint}${via} — pick a persona manually below. Your brand was left unchanged.`;
         this.detectOk = false; return;
       }
+      // PRESET match — set persona + fill all fields.
       this.research.persona = d.personaId;
-      const p = this.personas.find(x => x.id === d.personaId);
-      if (d.title) this.brand.seller_name = String(d.title).split(/[-|–:]/)[0].trim();
-      this.brand.offer = d.offer || d.suggestedOffer || (p ? p.offer : this.brand.offer);
+      fill();
       this.previewPlan();
       const conf = Math.round((d.confidence || 0) * 100);
       this.detectMsg = `Detected: ${p ? p.name : d.personaId} (${conf}% confidence)${via}. Edit anything below, then run.`;
