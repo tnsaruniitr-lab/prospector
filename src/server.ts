@@ -6,6 +6,9 @@ import { paths } from "./config.js";
 import { attachBridge, getAgentStatus } from "./bridge.js";
 import { scoreRelevance } from "./relevance.js";
 import { flattenDossier } from "./dossier.js";
+import { listPersonas, scaffoldPlan } from "./personas.js";
+import { safeParseResearchPlan } from "./research-plan.js";
+import { inferFromUrl, inferFromUrlLlm } from "./brand-infer.js";
 
 // Railway entrypoint. Applies migrations on boot, serves the web UI + REST API
 // + WebSocket bridge so local research agents can connect from any machine.
@@ -43,6 +46,24 @@ async function migrateBridgeTasks() {
       fixes       text,
       target_verticals jsonb default '[]',
       min_reviews int default 25,
+      created_at  timestamptz default now(),
+      updated_at  timestamptz default now()
+    )`).catch(() => {});
+  // v2: remember the selected persona with the brand (added after the table existed).
+  await pool.query(`alter table prospect.seller_profiles add column if not exists persona text`).catch(() => {});
+  // v2: the local request queue — the bridge between the web UI and the user's
+  // own local Claude. Web writes a 'pending' request; the local Claude drains it
+  // (reads pending → does the work with its tools → writes the result). No key,
+  // no spawned CLI — it's the conversational Claude already running locally.
+  await pool.query(`
+    create table if not exists prospect.requests (
+      id          text primary key default gen_random_uuid()::text,
+      agent_token text not null,
+      type        text not null,             -- 'infer' | 'research'
+      payload     jsonb not null default '{}',
+      status      text not null default 'pending',  -- pending|processing|done|error
+      result      jsonb,
+      error       text,
       created_at  timestamptz default now(),
       updated_at  timestamptz default now()
     )`).catch(() => {});
@@ -96,6 +117,75 @@ const httpServer = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── v2: personas (for the picker) ─────────────────────────────────────────
+  if (url.startsWith("/api/personas") && method === "GET") {
+    json(res, listPersonas().map((p) => ({
+      id: p.id, name: p.name, offer: p.offer,
+      defaultResearchSources: p.defaultResearchSources,
+      defaultContactSource: p.defaultContactSource,
+    })));
+    return;
+  }
+
+  // ── v2: infer persona from the seller's own website (onboarding) ──────────
+  if (url === "/api/infer" && method === "POST") {
+    const body = (await readBody(req)) as { url?: string };
+    if (!body.url) { json(res, { error: "url required" }, 400); return; }
+    try {
+      // API-call model: if ANTHROPIC_API_KEY is set, the server calls the LLM
+      // synchronously (instant + broad — ANY business + ICP + sources). No key →
+      // null → fall back to the instant keyword matcher. Either way it's one
+      // request → one response. No listen-loop, no queue.
+      const llm = await inferFromUrlLlm(body.url).catch(() => null);
+      if (llm) { json(res, { ...llm, source: "llm" }); return; }
+      const result = await inferFromUrl(body.url);
+      json(res, { ...result, source: "keyword" });
+    } catch (e) {
+      json(res, { error: e instanceof Error ? e.message : String(e) }, 400);
+    }
+    return;
+  }
+
+  // ── v2: request queue — web enqueues, local Claude drains ─────────────────
+  if (url === "/api/request" && method === "POST") {
+    const body = (await readBody(req)) as { agent_token?: string; type?: string; payload?: unknown };
+    if (!body.agent_token || !body.type) { json(res, { error: "agent_token + type required" }, 400); return; }
+    try {
+      const r = await pool.query(
+        `insert into prospect.requests (agent_token, type, payload) values ($1,$2,$3::jsonb) returning id`,
+        [body.agent_token, body.type, JSON.stringify(body.payload || {})],
+      );
+      json(res, { id: r.rows[0].id, status: "pending" });
+    } catch (e) { json(res, { error: e instanceof Error ? e.message : String(e) }, 500); }
+    return;
+  }
+
+  // web UI polls this for the result
+  if (url.startsWith("/api/request/") && method === "GET") {
+    const id = url.split("/api/request/")[1].split("?")[0];
+    const r = await pool.query(`select status, result, error from prospect.requests where id=$1`, [id]).catch(() => ({ rows: [] }));
+    json(res, r.rows[0] || { status: "unknown" });
+    return;
+  }
+
+  // ── v2: scaffold a Research Plan from persona + who + where ────────────────
+  if (url === "/api/scaffold" && method === "POST") {
+    const body = (await readBody(req)) as { persona?: string; vertical?: string; region?: string };
+    if (!body.persona || !body.vertical || !body.region) {
+      json(res, { error: "persona, vertical, region required" }, 400);
+      return;
+    }
+    try {
+      const plan = scaffoldPlan(body.persona, body.vertical, body.region);
+      const v = safeParseResearchPlan(plan); // self-check the scaffold validates
+      if (!v.success) { json(res, { error: "scaffold invalid", issues: v.error.issues }, 500); return; }
+      json(res, plan);
+    } catch (e) {
+      json(res, { error: e instanceof Error ? e.message : String(e) }, 400);
+    }
+    return;
+  }
+
   // ── Seller profile ──────────────────────────────────────────────────────
   if (url.startsWith("/api/brand") && method === "GET") {
     const token = new URL(url, "http://x").searchParams.get("token") || "";
@@ -106,14 +196,18 @@ const httpServer = http.createServer(async (req, res) => {
 
   if (url === "/api/brand" && method === "POST") {
     const body = await readBody(req) as Record<string, unknown>;
-    const { agent_token, seller_name, offer, value_prop, fixes, target_verticals, min_reviews } = body;
+    const { agent_token, seller_name, offer, value_prop, fixes, target_verticals, min_reviews, persona } = body;
     if (!agent_token) { json(res, { error: "agent_token required" }, 400); return; }
-    await pool.query(`
-      insert into prospect.seller_profiles (agent_token, seller_name, offer, value_prop, fixes, target_verticals, min_reviews, updated_at)
-      values ($1,$2,$3,$4,$5,$6::jsonb,$7,now())
-      on conflict (agent_token) do update set seller_name=$2, offer=$3, value_prop=$4, fixes=$5, target_verticals=$6::jsonb, min_reviews=$7, updated_at=now()
-    `, [agent_token, seller_name, offer, value_prop, fixes, JSON.stringify(target_verticals || []), min_reviews || 25]);
-    json(res, { ok: true });
+    try {
+      await pool.query(`
+        insert into prospect.seller_profiles (agent_token, seller_name, offer, value_prop, fixes, target_verticals, min_reviews, persona, updated_at)
+        values ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,now())
+        on conflict (agent_token) do update set seller_name=$2, offer=$3, value_prop=$4, fixes=$5, target_verticals=$6::jsonb, min_reviews=$7, persona=$8, updated_at=now()
+      `, [agent_token, seller_name, offer, value_prop, fixes, JSON.stringify(target_verticals || []), min_reviews || 25, persona || null]);
+      json(res, { ok: true });
+    } catch (e) {
+      json(res, { ok: false, error: e instanceof Error ? e.message : String(e) }, 500);
+    }
     return;
   }
 
@@ -184,6 +278,10 @@ const httpServer = http.createServer(async (req, res) => {
 
 // Attach WebSocket bridge
 attachBridge(httpServer);
+
+// Safety net: a stray DB/handler error must NEVER kill the server process.
+process.on("unhandledRejection", (e) => console.error("[server] unhandledRejection (non-fatal):", e instanceof Error ? e.message : e));
+process.on("uncaughtException", (e) => console.error("[server] uncaughtException (non-fatal):", e instanceof Error ? e.message : e));
 
 httpServer.listen(port, () => console.log(`[server] running on :${port} — UI at /app`));
 

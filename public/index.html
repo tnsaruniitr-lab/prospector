@@ -67,7 +67,21 @@
       <svg class="w-5 h-5 text-gray-400 transition-transform" :class="brandOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
     </button>
     <div x-show="brandOpen" x-cloak class="px-6 pb-6 border-t space-y-4">
-      <p class="text-sm text-gray-500 pt-4">Tell us about your business so results are ranked and pitched specifically for you.</p>
+      <!-- Website-first: paste your site, we detect what you sell -->
+      <div class="pt-4">
+        <label class="block text-xs font-medium text-gray-700 mb-1">Paste your website — we'll detect what you sell</label>
+        <div class="flex gap-2">
+          <input x-model="brandUrl" @keydown.enter="detectFromUrl()" type="text" placeholder="e.g. answermonk.com" class="flex-1 border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+          <button @click="detectFromUrl()" :disabled="detecting" class="bg-gray-900 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap">
+            <span x-show="!detecting">✨ Detect</span><span x-show="detecting">Detecting…</span>
+          </button>
+          <button @click="askMyClaude()" :disabled="detecting" title="Routes to YOUR local Claude — understands any business, no key" class="bg-indigo-600 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap">
+            🤖 Ask my Claude
+          </button>
+        </div>
+        <p x-show="detectMsg" x-cloak class="text-xs mt-1" :class="detectOk ? 'text-green-600' : 'text-amber-600'" x-text="detectMsg"></p>
+      </div>
+      <p class="text-xs text-gray-400">— or fill it in manually below —</p>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label class="block text-xs font-medium text-gray-700 mb-1">Your brand / studio name</label>
@@ -94,6 +108,14 @@
   <div class="bg-white rounded-xl border shadow-sm p-6">
     <h2 class="font-semibold text-gray-900 mb-4">Research Prospects</h2>
     <div class="flex flex-wrap gap-4 items-end">
+      <div>
+        <label class="block text-xs font-medium text-gray-700 mb-1">What you sell (persona)</label>
+        <select x-model="research.persona" @change="previewPlan()" class="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+          <template x-for="p in personas" :key="p.id">
+            <option :value="p.id" x-text="p.name"></option>
+          </template>
+        </select>
+      </div>
       <div>
         <label class="block text-xs font-medium text-gray-700 mb-1">Category</label>
         <select x-model="research.category" class="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
@@ -122,6 +144,24 @@
         <span x-show="!researching">🔍 Research</span>
         <span x-show="researching" class="flex items-center gap-2"><svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> Researching...</span>
       </button>
+    </div>
+
+    <!-- Scaffolded plan preview (editable source toggles) -->
+    <div x-show="plan" x-cloak class="mt-4 border rounded-lg p-4 bg-blue-50/40">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-semibold text-gray-700">AI-scaffolded plan — toggle sources before you run</span>
+        <span class="text-xs text-gray-400">persona: <span x-text="research.persona"></span></span>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <template x-for="(s, i) in (plan?.researchSources || [])" :key="s.type">
+          <label class="flex items-center gap-1.5 bg-white border rounded-lg px-2.5 py-1 text-xs cursor-pointer" :class="s.enabled ? 'border-blue-300 text-gray-800' : 'border-gray-200 text-gray-400 line-through'">
+            <input type="checkbox" x-model="s.enabled" class="accent-blue-600">
+            <span x-text="s.type"></span>
+            <span class="text-gray-400" x-text="'(' + (s.signals?.length||0) + ')'"></span>
+          </label>
+        </template>
+        <span class="flex items-center gap-1 text-xs text-gray-500 ml-2">contact: <span class="font-medium" x-text="plan?.contactSource?.type"></span></span>
+      </div>
     </div>
 
     <!-- Progress log -->
@@ -217,7 +257,13 @@ function app() {
     brandOpen: true,
     brandSaved: false,
     brand: { seller_name: "", offer: "", value_prop: "", fixes: "" },
-    research: { category: "med spa", city: "Berlin, Germany", limit: "1" },
+    brandUrl: "",
+    detecting: false,
+    detectMsg: "",
+    detectOk: false,
+    research: { persona: "ai_search_visibility", category: "med spa", city: "Berlin, Germany", limit: "1" },
+    personas: [],
+    plan: null,
     researching: false,
     taskId: null,
     log: [],
@@ -229,8 +275,127 @@ function app() {
       localStorage.setItem("agentToken", this.agentToken);
       this.loadBrand();
       this.loadProspects();
+      this.loadPersonas();
       this.connectWS();
       setInterval(() => this.pollAgent(), 5000);
+    },
+
+    // Website-first onboarding: detect persona + offer from the seller's own site.
+    async detectFromUrl() {
+      if (!this.brandUrl.trim()) return;
+      this.detecting = true; this.detectMsg = ""; this.detectOk = false;
+      try {
+        let d = null, source = "keyword";
+        // Prefer the no-key LLM path (your Claude Code via the agent) when connected.
+        if (this.agentConnected && this.ws?.readyState === WebSocket.OPEN) {
+          this.detectMsg = "Analyzing with your Claude…";
+          try {
+            const res = await this.detectSmartViaAgent(this.brandUrl);
+            if (res.status === "ok") { d = res.data; source = "claude"; }
+          } catch (e) { /* fall through to keyword */ }
+        }
+        // Fallback (or no agent): instant keyword matcher.
+        if (!d) {
+          const r = await fetch(`${SERVER}/api/infer`, {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: this.brandUrl }),
+          });
+          d = await r.json(); source = "keyword";
+          if (d.error) { this.detectMsg = `Couldn't read that site (${d.error}). Fill it in manually.`; this.detecting = false; return; }
+        }
+        this.applyDetect(d, source);
+      } catch (e) { this.detectMsg = "Detection failed — fill it in manually."; this.detectOk = false; }
+      this.detecting = false;
+    },
+
+    // Queue an inference for YOUR local Claude (the conversational one) to drain.
+    // No key, no spawned CLI — your own Claude reads the queue and does the work.
+    async askMyClaude() {
+      if (!this.brandUrl.trim()) return;
+      this.detecting = true; this.detectOk = false;
+      this.detectMsg = "Queued for your Claude… in your Claude chat say: “drain the prospect-engine queue”.";
+      try {
+        const enq = await (await fetch(`${SERVER}/api/request`, {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ agent_token: this.agentToken, type: "infer", payload: { url: this.brandUrl } }),
+        })).json();
+        if (enq.error || !enq.id) { this.detectMsg = "Couldn't queue the request."; this.detecting = false; return; }
+        // Poll for the result (your Claude writes it when it drains the queue).
+        const id = enq.id;
+        const started = Date.now();
+        while (Date.now() - started < 5 * 60 * 1000) {
+          await new Promise(r => setTimeout(r, 2500));
+          const st = await (await fetch(`${SERVER}/api/request/${id}`)).json();
+          if (st.status === "done") { this.applyDetect(st.result || {}, "claude"); this.detecting = false; return; }
+          if (st.status === "error") { this.detectMsg = `Your Claude reported: ${st.error || "error"}`; this.detecting = false; return; }
+        }
+        this.detectMsg = "Still waiting on your Claude — leave it; it'll fill in when your Claude drains the queue.";
+      } catch (e) { this.detectMsg = "Queue request failed."; }
+      this.detecting = false;
+    },
+
+    // Send an infer task to the agent (user's Claude Code) and await the result.
+    detectSmartViaAgent(url) {
+      return new Promise((resolve, reject) => {
+        const taskId = crypto.randomUUID();
+        this._inferResolvers = this._inferResolvers || {};
+        const timer = setTimeout(() => { delete this._inferResolvers[taskId]; reject(new Error("timeout")); }, 40000);
+        this._inferResolvers[taskId] = (msg) => { clearTimeout(timer); resolve(msg); };
+        this.ws.send(JSON.stringify({ type: "infer", agentToken: this.agentToken, url, taskId }));
+      });
+    },
+
+    // Apply a detection result (works for keyword InferResult OR LLM BrandExtract).
+    applyDetect(d, source) {
+      const confident = (d.confident !== undefined) ? d.confident : (!!d.personaId && (d.confidence || 0) >= 0.5);
+      const via = source === "claude" ? " (via your Claude)" : "";
+      const p = d.personaId ? this.personas.find(x => x.id === d.personaId) : null;
+      // Populate ALL brand fields from whatever the detection gave us.
+      const fill = () => {
+        if (d.title) this.brand.seller_name = String(d.title).split(/[-|–:]/)[0].trim();
+        this.brand.offer = d.offer || d.suggestedOffer || (p ? p.offer : this.brand.offer);
+        this.brand.value_prop = d.painYouFix || (p ? p.valueProp : this.brand.value_prop) || "";
+        this.brand.fixes = d.fixes || (Array.isArray(d.services) && d.services.length ? d.services.join(", ") : (p ? p.fixes : this.brand.fixes)) || "";
+      };
+      // BROAD case: understood, fits no preset → custom seller. Fill everything.
+      if (!d.personaId && d.vertical && (d.confidence || 0) >= 0.6) {
+        fill();
+        this.detectMsg = `Understood: ${d.vertical}${via} — no preset fits, so a custom plan would be built. ${d.reasoning || ""}`.slice(0, 170);
+        this.detectOk = true; return;
+      }
+      if (!confident) {
+        const hint = d.personaId ? ` (weak '${d.personaId}' signal)` : "";
+        this.detectMsg = `Read the site, but couldn't confidently tell what you sell${hint}${via} — pick a persona manually below. Your brand was left unchanged.`;
+        this.detectOk = false; return;
+      }
+      // PRESET match — set persona + fill all fields.
+      this.research.persona = d.personaId;
+      fill();
+      this.previewPlan();
+      const conf = Math.round((d.confidence || 0) * 100);
+      this.detectMsg = `Detected: ${p ? p.name : d.personaId} (${conf}% confidence)${via}. Edit anything below, then run.`;
+      this.detectOk = true;
+    },
+
+    async loadPersonas() {
+      try {
+        const r = await fetch(`${SERVER}/api/personas`);
+        this.personas = await r.json();
+        await this.previewPlan();
+      } catch {}
+    },
+
+    // Scaffold a plan from persona + who + where; show it editable before running.
+    async previewPlan() {
+      try {
+        const vertical = this.research.category.replace(/\s+/g, "_");
+        const r = await fetch(`${SERVER}/api/scaffold`, {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ persona: this.research.persona, vertical, region: this.research.city }),
+        });
+        const p = await r.json();
+        if (!p.error) this.plan = p;
+      } catch {}
     },
 
     connectWS() {
@@ -254,6 +419,10 @@ function app() {
           if (msg.type === "agent_offline") {
             this.log.push("⏳ Agent offline — task queued. Run `npx prospect-engine connect` to start.");
           }
+          if (msg.type === "infer_result") {
+            const r = this._inferResolvers && this._inferResolvers[msg.taskId];
+            if (r) { delete this._inferResolvers[msg.taskId]; r(msg); }
+          }
         };
         this.ws.onclose = () => { setTimeout(() => this.connectWS(), 3000); };
       } catch(e) { console.log("WS not available"); }
@@ -271,7 +440,10 @@ function app() {
       try {
         const r = await fetch(`${SERVER}/api/brand?token=${this.agentToken}`);
         const d = await r.json();
-        if (d) { this.brand = d; this.brandSaved = true; this.brandOpen = false; }
+        if (d) {
+          this.brand = d; this.brandSaved = true; this.brandOpen = false;
+          if (d.persona) { this.research.persona = d.persona; await this.previewPlan(); } // restore persona
+        }
       } catch {}
     },
 
@@ -279,10 +451,11 @@ function app() {
       await fetch(`${SERVER}/api/brand`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...this.brand, agent_token: this.agentToken }),
+        body: JSON.stringify({ ...this.brand, persona: this.research.persona, agent_token: this.agentToken }),
       });
       this.brandSaved = true;
       this.brandOpen = false;
+      this.detectMsg = ""; // clear any stale detect message on save
     },
 
     async loadProspects() {
@@ -292,10 +465,14 @@ function app() {
       } catch {}
     },
 
-    startResearch() {
+    async startResearch() {
       if (!this.agentConnected && !confirm("Agent is offline. Queue the task anyway? It'll run when your agent connects.")) return;
+      // Ensure we have a current (possibly edited) plan to send.
+      if (!this.plan) await this.previewPlan();
+      if (this.plan) this.plan.editedByUser = true;
       this.researching = true;
-      this.log = [`Starting research: ${this.research.category} in ${this.research.city}...`];
+      const enabled = (this.plan?.researchSources || []).filter(s => s.enabled).map(s => s.type).join(", ");
+      this.log = [`Starting: ${this.research.category} in ${this.research.city} — sources: ${enabled || "default"}`];
       this.taskId = crypto.randomUUID();
       if (this.ws?.readyState === WebSocket.OPEN) {
         this.ws.send(JSON.stringify({
@@ -306,6 +483,7 @@ function app() {
           city: this.research.city,
           limit: parseInt(this.research.limit),
           sellerProfile: this.brand,
+          researchPlan: this.plan,   // v2: the edited, persona-scaffolded plan
         }));
       }
     },

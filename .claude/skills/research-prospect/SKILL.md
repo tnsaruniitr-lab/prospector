@@ -9,6 +9,28 @@ Follow these stages **in order** for the given domain. Each stage has a fixed
 procedure and a validation gate. The deterministic extractors live in
 `src/browser/*.js`; synthesis + persistence are code in `src/`.
 
+## Stage −1 — Read the Research Plan  (v2 — if `research-plan.json` exists)
+
+Before anything else, check for `research-plan.json` in the project root. **If it
+exists, it overrides the fixed flow** — run ONLY the sources/signals it enables:
+
+- `researchSources[]` — for each entry with `enabled !== false`, run that source's
+  browser recipe (semrush_ai, semrush_seo, onpage_audit, pagespeed, google_maps,
+  linkedin_company, or `custom`). **Skip any source the plan disabled** — e.g. a
+  `web_redesign` plan runs PageSpeed + audit and does NOT run the SEMrush AI module.
+- `custom` source → read its `{ site, instructions }` and follow the instructions in
+  the browser with judgment; record findings under `customFindings`.
+- `signals[]` per source — extract exactly those facts (or note thin/blocked/not-found).
+- `contactSource.type` — use `linkedin` or `apollo_browser` (logged-in session, **no
+  API key**) or skip if `manual`.
+- Validate with the **plan-aware gate** (`src/plan-gate.ts` → `assertPlanComplete`),
+  which demands only enabled sources — NOT the hardcoded SEMrush+LinkedIn gate.
+- Score relevance with `scoreRelevanceV2()` (`src/relevance-v2.ts`) using the plan's
+  `sellerPersona` (`src/personas.ts`).
+
+If there is **no** `research-plan.json`, fall back to the fixed flow below (v1 default:
+SEMrush AI + LinkedIn for the AEO use case).
+
 **Golden rule: never fabricate.** If a value isn't found, record `not found` /
 `thin` / `not public` and continue. An email derived from a pattern is
 `valid_domain` (domain accepts mail), NEVER `valid_mailbox`. A LinkedIn URL is

@@ -22,6 +22,9 @@ export interface ResearchTask {
   city: string;
   limit?: number;
   sellerProfile?: Record<string, unknown>;
+  // v2: the full configurable Research Plan (persona + sources + signals + contact).
+  // When present, the agent writes it to research-plan.json and the skill runs it.
+  researchPlan?: Record<string, unknown>;
 }
 
 interface AgentConn {
@@ -115,6 +118,7 @@ export function attachBridge(httpServer: import("http").Server) {
           category, city,
           limit: Number(msg.limit || 1),
           sellerProfile: (msg.sellerProfile as Record<string, unknown>) || {},
+          researchPlan: (msg.researchPlan as Record<string, unknown>) || undefined,
         };
         await persistTask(task, "queued");
         send(ws, { type: "queued", taskId: task.taskId });
@@ -127,6 +131,28 @@ export function attachBridge(httpServer: import("http").Server) {
           pendingTasks.set(task.taskId, task); // deliver when agent reconnects
           send(ws, { type: "agent_offline", taskId: task.taskId, note: "task queued, will run when agent connects" });
         }
+        return;
+      }
+
+      // ── Web client requests LLM brand inference (no-key, via the agent) ─
+      if (msg.type === "infer") {
+        const token = String(msg.agentToken || "");
+        const url = String(msg.url || "");
+        const taskId = String(msg.taskId || uuid());
+        const agent = agents.get(token);
+        if (agent && agent.ws.readyState === WebSocket.OPEN) {
+          send(agent.ws, { type: "infer_task", taskId, url });
+        } else {
+          send(ws, { type: "infer_result", taskId, status: "error", error: "agent offline" });
+        }
+        return;
+      }
+
+      // ── Agent returns an inference result → forward to watchers ─────────
+      if (msg.type === "infer_result") {
+        const token = [...agents.entries()].find(([, v]) => v.ws === ws)?.[0];
+        if (!token) return;
+        broadcast(token, msg);
         return;
       }
 

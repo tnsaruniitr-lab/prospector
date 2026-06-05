@@ -1,0 +1,165 @@
+{
+  "sellerPersona": "ai_search_visibility",
+  "prospectVertical": "med_spa",
+  "region": "Berlin, Germany",
+  "researchSources": [
+    {
+      "type": "semrush_ai",
+      "enabled": true,
+      "pinned": false,
+      "signals": [
+        {
+          "key": "ai_mentions",
+          "meaning": "how often AI engines mention them",
+          "painThreshold": "pain if < 30",
+          "pitchWeight": 8
+        },
+        {
+          "key": "ai_delta_vs_leader",
+          "meaning": "gap vs the category AI leader",
+          "painThreshold": "pain if leader > 2x",
+          "pitchWeight": 9
+        },
+        {
+          "key": "cited_pages",
+          "meaning": "pages AI quotes from them",
+          "painThreshold": "pain if few",
+          "pitchWeight": 6
+        },
+        {
+          "key": "organic_traffic",
+          "meaning": "scale / budget proxy",
+          "pitchWeight": 4
+        }
+      ]
+    },
+    {
+      "type": "onpage_audit",
+      "enabled": true,
+      "pinned": false,
+      "signals": [
+        {
+          "key": "missing_schema",
+          "meaning": "no LocalBusiness/Person/FAQ markup",
+          "painThreshold": "pain if missing",
+          "pitchWeight": 8
+        },
+        {
+          "key": "rendered_words",
+          "meaning": "thin content AI can't cite",
+          "painThreshold": "pain if < 300",
+          "pitchWeight": 5
+        }
+      ]
+    },
+    {
+      "type": "google_maps",
+      "enabled": true,
+      "pinned": false,
+      "signals": [
+        {
+          "key": "google_rating",
+          "meaning": "social proof",
+          "pitchWeight": 3
+        },
+        {
+          "key": "review_count",
+          "meaning": "scale / established",
+          "pitchWeight": 4
+        }
+      ]
+    }
+  ],
+  "contactSource": {
+    "type": "linkedin",
+    "enabled": true
+  },
+  "outputFields": [
+    {
+      "key": "name",
+      "label": "Business",
+      "group": "identity",
+      "fromSignal": "identity"
+    },
+    {
+      "key": "domain",
+      "label": "Domain",
+      "group": "identity",
+      "fromSignal": "identity"
+    },
+    {
+      "key": "ai_mentions",
+      "label": "how often AI engines mention them",
+      "group": "pain",
+      "fromSignal": "ai_mentions"
+    },
+    {
+      "key": "ai_delta_vs_leader",
+      "label": "gap vs the category AI leader",
+      "group": "pain",
+      "fromSignal": "ai_delta_vs_leader"
+    },
+    {
+      "key": "cited_pages",
+      "label": "pages AI quotes from them",
+      "group": "pain",
+      "fromSignal": "cited_pages"
+    },
+    {
+      "key": "organic_traffic",
+      "label": "scale / budget proxy",
+      "group": "capacity",
+      "fromSignal": "organic_traffic"
+    },
+    {
+      "key": "missing_schema",
+      "label": "no LocalBusiness/Person/FAQ markup",
+      "group": "pain",
+      "fromSignal": "missing_schema"
+    },
+    {
+      "key": "rendered_words",
+      "label": "thin content AI can't cite",
+      "group": "pain",
+      "fromSignal": "rendered_words"
+    },
+    {
+      "key": "google_rating",
+      "label": "social proof",
+      "group": "capacity",
+      "fromSignal": "google_rating"
+    },
+    {
+      "key": "review_count",
+      "label": "scale / established",
+      "group": "capacity",
+      "fromSignal": "review_count"
+    },
+    {
+      "key": "founder",
+      "label": "Founder",
+      "group": "contact",
+      "fromSignal": "contact"
+    },
+    {
+      "key": "founder_email",
+      "label": "Email",
+      "group": "contact",
+      "fromSignal": "contact"
+    },
+    {
+      "key": "subject_headline",
+      "label": "Subject line",
+      "group": "pitch",
+      "fromSignal": "synthesis"
+    },
+    {
+      "key": "relevance_verdict",
+      "label": "Verdict",
+      "group": "pitch",
+      "fromSignal": "synthesis"
+    }
+  ],
+  "scaffoldedByAi": true,
+  "editedByUser": true
+}
