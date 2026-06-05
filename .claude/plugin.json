@@ -1,0 +1,16 @@
+{
+  "name": "prospect-engine",
+  "version": "0.1.0",
+  "description": "Browser-first B2B prospect research. Discovers businesses, runs deep AEO/SEO + AI-visibility + LinkedIn research, scores by ICP fit. Triggers automatically on session start — watches a queue so the web UI at localhost:3000/app can invoke research via your local Claude.",
+  "author": "tnsaruniitr-lab",
+  "repository": "https://github.com/tnsaruniitr-lab/prospector",
+  "autoStart": true,
+  "requires": {
+    "env": ["DATABASE_URL"],
+    "tools": ["Bash", "Read", "Write"],
+    "mcp": ["Claude_in_Chrome"]
+  },
+  "skills": [
+    "research-prospect"
+  ]
+}
