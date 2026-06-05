@@ -290,6 +290,35 @@ section("Wedge-finder — diagnostic spec");
   check("T6.7 garbage → null", parseWedge("nope") === null);
 }
 
+// ═══ Output contract — core + per-wedge diagnostic ═══════════════════════════
+section("Output contract — wedge-driven columns");
+{
+  const { outputContract, UNIVERSAL_CORE } = await import("./output-contract.js");
+
+  // Your AEO persona → full curated rich set (retained)
+  const aeo = outputContract({ persona: "ai_search_visibility" });
+  const aeoKeys = aeo.map(c => c.key);
+  check("T7.1 AEO persona → core + full AEO diagnostic (ai_mentions present)",
+    aeoKeys.includes("ai_mentions") && aeoKeys.includes("category_ai_leader") && aeoKeys.includes("founder_email"));
+
+  // New seller (EPC wedge, no curated persona) → core + ITS signals, NOT AEO columns
+  const epcWedge = { wedge: "x", sources: ["google_search"], sourceTier: "light" as const, pitchFormula: "y", confidence: 0.8, reasoning: "z",
+    provingSignals: [{ signal: "announced_project", meaning: "m", threshold: "t", source: "google_search" }] };
+  const epc = outputContract({ wedge: epcWedge });
+  const epcKeys = epc.map(c => c.key);
+  check("T7.2 EPC wedge → core + announced_project, NO ai_mentions (no AEO bloat)",
+    epcKeys.includes("announced_project") && !epcKeys.includes("ai_mentions") && epcKeys.includes("founder_email"));
+
+  check("T7.3 universal core always present (name, founder, relevance) in both",
+    aeoKeys.includes("name") && aeoKeys.includes("relevance_tier") && epcKeys.includes("name") && epcKeys.includes("relevance_tier"));
+
+  check("T7.4 AEO is richer than a light wedge", aeo.length > epc.length);
+
+  const empty = outputContract({});
+  check("T7.5 no persona + no wedge → just the universal core",
+    empty.length === UNIVERSAL_CORE.length);
+}
+
 // ═══ summary ═══
 console.log(`\n${"═".repeat(50)}`);
 console.log(`RESULT: ${passed} passed, ${failed} failed`);

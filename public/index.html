@@ -280,6 +280,25 @@
       </div>
     </div>
 
+    <!-- Output preview — which dossier columns this seller's wedge will produce -->
+    <div x-show="outputCount" x-cloak class="mt-4 border rounded-lg p-4">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-semibold text-gray-700">Your dossier columns <span class="text-gray-400 font-normal">— what this wedge produces</span></span>
+        <span class="text-xs text-gray-400" x-text="outputCount + ' columns'"></span>
+      </div>
+      <div class="space-y-1.5">
+        <template x-for="(cols, group) in outputGrouped" :key="group">
+          <div class="flex flex-wrap gap-1.5 items-baseline">
+            <span class="text-[10px] uppercase tracking-wide text-gray-400 w-20" x-text="group"></span>
+            <template x-for="c in cols" :key="c.key">
+              <span class="rounded px-1.5 py-0.5 text-[11px]" :class="c.group === 'diagnostic' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-50 text-gray-600 border'" x-text="c.label" :title="c.threshold ? (c.threshold + ' · ' + c.source) : ''"></span>
+            </template>
+          </div>
+        </template>
+      </div>
+      <p class="text-xs text-gray-400 mt-2">🟢 green = your wedge's diagnostic columns · grey = universal core (every dossier). Full data always stored; this is the focused view.</p>
+    </div>
+
     <!-- Progress log -->
     <div x-show="log.length" x-cloak class="mt-4 bg-gray-50 rounded-lg p-4 text-xs font-mono text-gray-600 space-y-1 max-h-40 overflow-y-auto">
       <template x-for="line in log" :key="line">
@@ -410,6 +429,8 @@ function app() {
     catalog: CONTACT_CATALOG,
     wedgeLoading: false,
     wedgeMsg: "",
+    outputGrouped: {},
+    outputCount: 0,
     brandUrl: "",
     detecting: false,
     detectMsg: "",
@@ -430,6 +451,7 @@ function app() {
       this.loadProspects();
       this.loadPersonas();
       this.loadInferStatus();
+      this.loadOutputContract();
       this.connectWS();
       setInterval(() => this.pollAgent(), 5000);
     },
@@ -571,6 +593,19 @@ function app() {
     applyWedgeSources() {
       const s = this.brand.wedge?.sources;
       if (Array.isArray(s) && s.length) { this.brand.suggested_sources = [...s]; if (this.plan) this.previewPlan(); }
+      this.loadOutputContract();
+    },
+
+    // Which dossier columns this seller will get (core + curated/wedge diagnostic).
+    async loadOutputContract() {
+      try {
+        const r = await (await fetch(`${SERVER}/api/output-contract`, {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ persona: this.brand.persona || this.research.persona, wedge: this.brand.wedge }),
+        })).json();
+        this.outputGrouped = r.grouped || {};
+        this.outputCount = r.count || 0;
+      } catch {}
     },
 
     moveContact(i, dir) {

@@ -10,6 +10,7 @@ import { listPersonas, scaffoldPlan } from "./personas.js";
 import { safeParseResearchPlan } from "./research-plan.js";
 import { inferFromUrl, inferFromUrlLlm } from "./brand-infer.js";
 import { findWedgeLlm } from "./wedge.js";
+import { outputContract, groupContract } from "./output-contract.js";
 
 // Railway entrypoint. Applies migrations on boot, serves the web UI + REST API
 // + WebSocket bridge so local research agents can connect from any machine.
@@ -166,6 +167,14 @@ const httpServer = http.createServer(async (req, res) => {
     } catch (e) {
       json(res, { error: e instanceof Error ? e.message : String(e) }, 400);
     }
+    return;
+  }
+
+  // ── v2: output contract — which dossier columns this seller's wedge produces ─
+  if (url === "/api/output-contract" && method === "POST") {
+    const body = (await readBody(req)) as { persona?: string; wedge?: import("./wedge.js").DiagnosticSpec };
+    const cols = outputContract({ persona: body.persona, wedge: body.wedge });
+    json(res, { columns: cols, grouped: groupContract(cols), count: cols.length });
     return;
   }
 
