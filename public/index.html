@@ -68,20 +68,39 @@
     </button>
     <div x-show="brandOpen" x-cloak class="px-6 pb-6 border-t space-y-4">
       <!-- Website-first: paste your site, we detect what you sell -->
-      <div class="pt-4">
-        <label class="block text-xs font-medium text-gray-700 mb-1">Paste your website — we'll detect what you sell</label>
+      <div class="pt-4 space-y-2">
+        <!-- Active path badge -->
+        <div class="flex items-center gap-2">
+          <label class="block text-xs font-medium text-gray-700">Paste your website — we'll detect what you sell</label>
+          <span class="text-xs px-2 py-0.5 rounded-full font-medium"
+            :class="inferPath.path === 'llm' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'"
+            x-text="inferPath.path === 'llm' ? '🤖 AI (broad)' : '🔍 Keyword (4 presets)'">
+          </span>
+          <span x-show="inferPath.llmModel" class="text-xs text-gray-400" x-text="inferPath.llmModel"></span>
+        </div>
         <div class="flex gap-2">
-          <input x-model="brandUrl" @keydown.enter="detectFromUrl()" type="text" placeholder="e.g. answermonk.com" class="flex-1 border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-          <button @click="detectFromUrl()" :disabled="detecting" class="bg-gray-900 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap">
-            <span x-show="!detecting">✨ Detect</span><span x-show="detecting">Detecting…</span>
+          <input x-model="brandUrl" @keydown.enter="detectFromUrl()" type="text" placeholder="e.g. answermonk.com or pemo.io" class="flex-1 border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+          <!-- Path A: auto (LLM if key set, keyword fallback — instant) -->
+          <button @click="detectFromUrl()" :disabled="detecting" class="bg-gray-900 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap"
+            :title="inferPath.path === 'llm' ? 'Calls the LLM — any business, full ICP + sources' : 'Keyword matcher — instant, 4 preset personas'">
+            <span x-show="!detecting">✨ <span x-text="inferPath.path === 'llm' ? 'Detect (AI)' : 'Detect'"></span></span>
+            <span x-show="detecting">Detecting…</span>
           </button>
-          <button @click="askMyClaude()" :disabled="detecting" title="Routes to YOUR local Claude — understands any business, no key" class="bg-indigo-600 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap">
-            🤖 Ask my Claude
+          <!-- Path B: local Claude via queue — broad, works without key, needs chat open -->
+          <button @click="askMyClaude()" :disabled="detecting"
+            title="Queues for YOUR local Claude — broad, no key, needs this chat open"
+            class="bg-indigo-600 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap">
+            🤖 Ask Claude
           </button>
         </div>
-        <p x-show="detectMsg" x-cloak class="text-xs mt-1" :class="detectOk ? 'text-green-600' : 'text-amber-600'" x-text="detectMsg"></p>
+        <p x-show="detectMsg" x-cloak class="text-xs" :class="detectOk ? 'text-green-600' : 'text-amber-600'" x-text="detectMsg"></p>
+        <!-- Path status line -->
+        <p class="text-xs text-gray-400">
+          <span x-show="inferPath.path === 'llm'">✅ AI path active — ✨ Detect understands any business instantly</span>
+          <span x-show="inferPath.path !== 'llm'">⚡ Keyword path active (4 presets) · 🤖 Ask Claude for any business via chat queue</span>
+        </p>
       </div>
-      <p class="text-xs text-gray-400">— or fill it in manually below —</p>
+      <p class="text-xs text-gray-400">— or fill in manually below —</p>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label class="block text-xs font-medium text-gray-700 mb-1">Your brand / studio name</label>
@@ -254,6 +273,7 @@ function app() {
       ? "local"
       : (localStorage.getItem("agentToken") || crypto.randomUUID().slice(0, 16)),
     agentConnected: false,
+    inferPath: { path: "keyword", label: "Keyword (4 presets)", llmModel: null, queueAvailable: true },
     brandOpen: true,
     brandSaved: false,
     brand: { seller_name: "", offer: "", value_prop: "", fixes: "" },
@@ -276,6 +296,7 @@ function app() {
       this.loadBrand();
       this.loadProspects();
       this.loadPersonas();
+      this.loadInferStatus();
       this.connectWS();
       setInterval(() => this.pollAgent(), 5000);
     },
@@ -375,6 +396,13 @@ function app() {
       const conf = Math.round((d.confidence || 0) * 100);
       this.detectMsg = `Detected: ${p ? p.name : d.personaId} (${conf}% confidence)${via}. Edit anything below, then run.`;
       this.detectOk = true;
+    },
+
+    async loadInferStatus() {
+      try {
+        const r = await fetch(`${SERVER}/api/infer/status`);
+        this.inferPath = await r.json();
+      } catch {}
     },
 
     async loadPersonas() {

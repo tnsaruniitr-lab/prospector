@@ -127,6 +127,18 @@ const httpServer = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── v2: which detection path is active (useful for the UI to show the user) ─
+  if (url === "/api/infer/status" && method === "GET") {
+    const hasKey = !!process.env.ANTHROPIC_API_KEY;
+    json(res, {
+      path: hasKey ? "llm" : "keyword",
+      label: hasKey ? "AI (broad — any business)" : "Keyword (4 presets)",
+      llmModel: hasKey ? (process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5") : null,
+      queueAvailable: true, // chat-drain path always available as backup
+    });
+    return;
+  }
+
   // ── v2: infer persona from the seller's own website (onboarding) ──────────
   if (url === "/api/infer" && method === "POST") {
     const body = (await readBody(req)) as { url?: string };
