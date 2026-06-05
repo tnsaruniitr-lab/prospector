@@ -49,8 +49,14 @@ async function migrateBridgeTasks() {
       created_at  timestamptz default now(),
       updated_at  timestamptz default now()
     )`).catch(() => {});
-  // v2: remember the selected persona with the brand (added after the table existed).
+  // v2: remember the selected persona with the brand.
   await pool.query(`alter table prospect.seller_profiles add column if not exists persona text`).catch(() => {});
+  // v2: ICP fields — who to prospect for, how to find them, which sources to use.
+  await pool.query(`alter table prospect.seller_profiles add column if not exists icp text`).catch(() => {});
+  await pool.query(`alter table prospect.seller_profiles add column if not exists customer_types jsonb default '[]'`).catch(() => {});
+  await pool.query(`alter table prospect.seller_profiles add column if not exists competitor_hint text`).catch(() => {});
+  await pool.query(`alter table prospect.seller_profiles add column if not exists suggested_sources jsonb default '[]'`).catch(() => {});
+  await pool.query(`alter table prospect.seller_profiles add column if not exists services jsonb default '[]'`).catch(() => {});
   // v2: the local request queue — the bridge between the web UI and the user's
   // own local Claude. Web writes a 'pending' request; the local Claude drains it
   // (reads pending → does the work with its tools → writes the result). No key,
@@ -208,14 +214,23 @@ const httpServer = http.createServer(async (req, res) => {
 
   if (url === "/api/brand" && method === "POST") {
     const body = await readBody(req) as Record<string, unknown>;
-    const { agent_token, seller_name, offer, value_prop, fixes, target_verticals, min_reviews, persona } = body;
+    const { agent_token, seller_name, offer, value_prop, fixes, target_verticals, min_reviews, persona,
+            icp, customer_types, competitor_hint, suggested_sources, services } = body;
     if (!agent_token) { json(res, { error: "agent_token required" }, 400); return; }
     try {
       await pool.query(`
-        insert into prospect.seller_profiles (agent_token, seller_name, offer, value_prop, fixes, target_verticals, min_reviews, persona, updated_at)
-        values ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,now())
-        on conflict (agent_token) do update set seller_name=$2, offer=$3, value_prop=$4, fixes=$5, target_verticals=$6::jsonb, min_reviews=$7, persona=$8, updated_at=now()
-      `, [agent_token, seller_name, offer, value_prop, fixes, JSON.stringify(target_verticals || []), min_reviews || 25, persona || null]);
+        insert into prospect.seller_profiles
+          (agent_token, seller_name, offer, value_prop, fixes, target_verticals, min_reviews, persona,
+           icp, customer_types, competitor_hint, suggested_sources, services, updated_at)
+        values ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10::jsonb,$11,$12::jsonb,$13::jsonb,now())
+        on conflict (agent_token) do update set
+          seller_name=$2, offer=$3, value_prop=$4, fixes=$5, target_verticals=$6::jsonb,
+          min_reviews=$7, persona=$8, icp=$9, customer_types=$10::jsonb,
+          competitor_hint=$11, suggested_sources=$12::jsonb, services=$13::jsonb, updated_at=now()
+      `, [agent_token, seller_name, offer, value_prop, fixes,
+          JSON.stringify(target_verticals || []), min_reviews || 25, persona || null,
+          icp || null, JSON.stringify(customer_types || []), competitor_hint || null,
+          JSON.stringify(suggested_sources || []), JSON.stringify(services || [])]);
       json(res, { ok: true });
     } catch (e) {
       json(res, { ok: false, error: e instanceof Error ? e.message : String(e) }, 500);
