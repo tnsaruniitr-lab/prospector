@@ -494,26 +494,48 @@ function app() {
     },
 
     async startResearch() {
-      if (!this.agentConnected && !confirm("Agent is offline. Queue the task anyway? It'll run when your agent connects.")) return;
-      // Ensure we have a current (possibly edited) plan to send.
       if (!this.plan) await this.previewPlan();
       if (this.plan) this.plan.editedByUser = true;
       this.researching = true;
       const enabled = (this.plan?.researchSources || []).filter(s => s.enabled).map(s => s.type).join(", ");
       this.log = [`Starting: ${this.research.category} in ${this.research.city} — sources: ${enabled || "default"}`];
       this.taskId = crypto.randomUUID();
-      if (this.ws?.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify({
-          type: "research",
-          agentToken: this.agentToken,
-          taskId: this.taskId,
-          category: this.research.category,
-          city: this.research.city,
-          limit: parseInt(this.research.limit),
-          sellerProfile: this.brand,
-          researchPlan: this.plan,   // v2: the edited, persona-scaffolded plan
-        }));
+
+      const payload = {
+        category: this.research.category,
+        city: this.research.city,
+        limit: parseInt(this.research.limit),
+        sellerProfile: this.brand,
+        researchPlan: this.plan,
+        taskId: this.taskId,
+      };
+
+      // Path A: agent connected via WebSocket bridge → direct (headless CLI path)
+      if (this.agentConnected && this.ws?.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ type: "research", agentToken: this.agentToken, ...payload }));
+        this.log.push("📡 Sent to your connected agent…");
+        return;
       }
+
+      // Path B: queue for local Claude (Monitor watches → I handle it in the chat)
+      // Works when the agent isn't connected but this chat is open.
+      try {
+        const r = await fetch(`${SERVER}/api/request`, {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ agent_token: this.agentToken, type: "research", payload }),
+        });
+        const q = await r.json();
+        if (q.id) {
+          this.log.push(`🤖 Queued for your Claude (id: ${q.id.slice(0,8)}…). In your Claude chat, send any message — I'll pick it up.`);
+          // Poll for result
+          const poll = setInterval(async () => {
+            const s = await (await fetch(`${SERVER}/api/request/${q.id}`)).json();
+            if (s.status === "done") { clearInterval(poll); this.researching = false; this.log.push("✅ Research complete!"); setTimeout(() => this.loadProspects(), 1500); }
+            if (s.status === "error") { clearInterval(poll); this.researching = false; this.log.push("❌ " + (s.error || "error")); }
+          }, 3000);
+          setTimeout(() => clearInterval(poll), 10 * 60 * 1000); // 10 min timeout
+        }
+      } catch (e) { this.log.push("Queue failed — is the server running?"); this.researching = false; }
     },
 
     copySetupCmd() {
