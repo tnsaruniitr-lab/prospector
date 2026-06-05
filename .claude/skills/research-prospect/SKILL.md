@@ -105,6 +105,19 @@ title, metaDescLen.
    `competitive.thin = true` and note it — never guess.
 
 ## Stage 3 — Contacts: founder + 2nd decision-maker  (browser — logged into LinkedIn Premium)
+
+**Honor the plan's contact requirements (v2).** If `research-plan.json` has
+`contactChannels` / `requiredContacts`, capture channels in that ranked order and
+treat `requiredContacts` as must-haves for the gate (the rest are nice-to-have).
+Channels: founder_linkedin, founder_email, founder_phone, dm2, dm2_email,
+dm2_phone, business_email, business_phone, instagram, whatsapp, booking_link.
+- **founder_phone / dm2_phone** = direct/mobile → usually only via **Apollo (paid
+  phone-reveal)**. If Apollo paid isn't available, record `not_public` honestly —
+  never fabricate a number. Business phone (from the site) is free.
+- Source order per channel: LinkedIn → Apollo (logged-in) → the plan's `custom`
+  directory (if any) → site/Impressum. Stop once required channels are filled.
+- A required channel that can't be found → explicit `not_public` note (gate-safe).
+
 1. From the site (Stage 1 + its About / Team / Contact / Impressum pages) capture:
    business email, phone, WhatsApp (`wa.me`), Instagram, booking link.
 2. **Company People page:** `navigate` to `https://www.linkedin.com/company/{slug}/people/`
