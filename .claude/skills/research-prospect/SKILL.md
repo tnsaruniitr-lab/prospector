@@ -64,6 +64,14 @@ This curated playbook diagnoses **two wedges** and pitches the sharper one:
 Draft BOTH, lead with the sharper per prospect; record both in the dossier. The combined
 hook: *"invisible where buyers now search (AI) AND not converting the visitors you get."*
 
+**AEO scaffold sources (what `scaffoldPlan("ai_search_visibility", …)` emits):**
+- **Research:** `semrush_ai` (AI visibility + competitors/category leader), `onpage_audit`, `google_maps`, `pagespeed`.
+- **Contacts — identity:** `linkedin` (verify founder + DM2; `contactSource.type`).
+- **Contacts — verified email + direct phone:** **`apollo_browser`** (`contactSource.emailVerify`). Apollo
+  (logged-in, no key) supplies a **mailbox-verified** founder/DM2 email + direct/mobile phone — the
+  accurate path. Bare `first.last@` patterns are a labeled last resort (`emailStatus = valid_domain_guess`),
+  never the default. Business email still comes free from the site crawl (`find-contacts`, Stage 3.1).
+
 ## Input
 A domain (e.g. `altaderma.com`), optionally a business name + city.
 
@@ -132,8 +140,15 @@ dm2_phone, business_email, business_phone, instagram, whatsapp, booking_link.
   directory (if any) → site/Impressum. Stop once required channels are filled.
 - A required channel that can't be found → explicit `not_public` note (gate-safe).
 
-1. From the site (Stage 1 + its About / Team / Contact / Impressum pages) capture:
-   business email, phone, WhatsApp (`wa.me`), Instagram, booking link.
+1. **Business email + site contacts — do NOT skip (this column was historically sparse).**
+   Run `npx tsx src/find-contacts.ts <domain>` — it crawls /contact, /kontakt, **/impressum**,
+   /about, /team and parses `mailto:` links + visible text, returning business_email,
+   founder_email_candidate, phone, WhatsApp, socials, booking link, and people. Use its
+   `business_email` for the `business_email` column and `founder_email_candidate` to seed the
+   founder. If it returns no email, open the site's Impressum/Kontakt/Contact page in the browser
+   and read the footer `mailto:` (deobfuscate `info [at] domain`). Last resort: the Google
+   Business Profile listing. Only set business_email = null after all three fail (with a note) —
+   never fabricate. Also capture WhatsApp (`wa.me`), Instagram, booking link here.
 2. **Company People page:** `navigate` to `https://www.linkedin.com/company/{slug}/people/`
    (slug from the site's LinkedIn link, or a business-name search). Inject
    `src/browser/linkedin-people.js` → each employee's name + role + **`/in/` URL** (the URL
@@ -150,10 +165,22 @@ dm2_phone, business_email, business_phone, instagram, whatsapp, booking_link.
    company** match the prospect → set `linkedinVerified = true` only then. If a name has no
    company-page profile, search Google `"{name}" {business} {city}` → first `linkedin.com/in/`
    → verify the same way.
-5. **Complete each** named contact: call `completeContact()` (`src/contact-complete.ts`) with
-   `{ domain }` → derives the email pattern + MX-verifies the domain.
-6. **Validate:** ≥2 named decision-makers, OR an explicit "owner not public" note. Never invent
-   a LinkedIn URL; never mark an unverified email as confirmed.
+5. **Email for each named contact — accuracy ladder; set `emailStatus` honestly (never disguise a guess):**
+   a. **Published** — if `find-contacts` (Stage 3.1) returned a personal address for this name
+      (e.g. `vorname.nachname@firma.de` on the Impressum/team page), use it → `emailStatus = "published"`.
+   b. **Apollo — verified (the AEO default; plan `contactSource.emailVerify = apollo_browser`).**
+      Open Apollo in the logged-in browser (no key): `https://app.apollo.io/#/people` → search the
+      person by name + company, or filter the company by domain → People tab. Read Apollo's email and
+      its **email_status**: set `email` + `emailStatus = "apollo_verified"` (Apollo "Verified") or
+      `"apollo_likely"` (Apollo "Guessed/Likely"). Apollo also reveals the **direct/mobile phone**
+      on paid plans → `founder_phone` / `dm2_phone`.
+   c. **Pattern guess — last resort only.** If a + b fail, call `completeContact({ domain })`; it
+      derives the pattern, MX-verifies the domain, and labels it `emailStatus = "valid_domain_guess"`
+      (kept in `emailCandidates`). The main `*_email` column must prefer a/b; **never relabel a guess
+      as verified.**
+6. **Validate:** ≥2 named decision-makers, OR an explicit "owner not public" note. Never invent a
+   LinkedIn URL. `founder_email_status` / `dm2_email_status` MUST reflect reality —
+   `published`/`apollo_verified` = safe to email; `valid_domain_guess` = unconfirmed, treat as a lead not a fact.
 
 ## Stage 4 — Synthesis  (code, deterministic — do NOT hand-write)
 Call `synthesizeDiagnosis()` (`src/synthesis.ts`) with the Stage-1/2 signals. **Pass

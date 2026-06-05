@@ -50,6 +50,8 @@ export interface SellerPersona {
   painArchetype: string; // ties to brand-onboarding-design.md archetypes
   defaultResearchSources: ResearchSourceType[];
   defaultContactSource: ContactSourceType;
+  /** Verified-email source for named contacts — apollo_browser for AEO (mailbox-confirmed, not a guess). */
+  emailVerifySource?: ContactSourceType;
   signalMap: Partial<Record<ResearchSourceType, Signal[]>>;
   idealScale: ScaleBand;
   relevanceWeights: RelevanceWeights;
@@ -68,6 +70,7 @@ export const PERSONAS: Record<string, SellerPersona> = {
     painArchetype: "ai_invisibility",
     defaultResearchSources: ["semrush_ai", "onpage_audit", "google_maps", "pagespeed"],
     defaultContactSource: "linkedin",
+    emailVerifySource: "apollo_browser", // founder/DM2 email + direct phone via logged-in Apollo (verified, not guessed)
     signalMap: {
       semrush_ai: [
         { key: "ai_mentions", meaning: "how often AI engines mention them", painThreshold: "pain if < 30", pitchWeight: 8 },
@@ -246,7 +249,7 @@ export function scaffoldPlan(
     prospectVertical,
     region,
     researchSources,
-    contactSource: { type: persona.defaultContactSource, enabled: true },
+    contactSource: { type: persona.defaultContactSource, enabled: true, emailVerify: persona.emailVerifySource },
     outputFields: deriveOutputFields(persona),
     scaffoldedByAi: true,
     editedByUser: false,

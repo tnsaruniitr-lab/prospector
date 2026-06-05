@@ -61,6 +61,10 @@ export type ResearchSource = z.infer<typeof ResearchSourceSchema>;
 export const ContactSourceSchema = z.object({
   type: ContactSourceType,
   enabled: z.boolean().default(true),
+  // Verified-email enrichment for named contacts (founder/DM2). For AEO this is
+  // apollo_browser — a mailbox-verified email, not a pattern guess. LinkedIn stays
+  // the identity-verify source; Apollo supplies the confirmed email + direct phone.
+  emailVerify: ContactSourceType.optional(),
 });
 export type ContactSource = z.infer<typeof ContactSourceSchema>;
 

@@ -79,7 +79,7 @@ function escapeXml(s: string): string {
 }
 
 /** Build an xlsx Buffer from a header row + data rows (all strings). */
-async function buildXlsx(
+export async function buildXlsx(
   headers: readonly string[],
   rows: string[][],
 ): Promise<Buffer> {

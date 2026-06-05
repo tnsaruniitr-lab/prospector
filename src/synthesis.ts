@@ -81,6 +81,15 @@ const VERTICALS: Record<string, VerticalProfile> = {
     faqTopics: "pricing, process, results, and case-study questions",
     titleExample: "B2B SEO Agency Berlin | Lead Generation | Brand",
   },
+  facility_management: {
+    schemaTypes: "Organization/ProfessionalService",
+    schemaFix: "Add Organization + ProfessionalService/Service schema (serviceType, areaServed, sameAs) so AI can identify what the FM firm does and the areas it covers.",
+    leadRole: "The owner/managing director",
+    authorityContext: "on “best facility management company” shortlist queries",
+    personFix: "Add Person schema for the MD/principals + certifications (ISO 41001, safety/compliance) so AI can attribute the firm's credibility.",
+    faqTopics: "service scope, SLAs, compliance/certifications, coverage areas, pricing model",
+    titleExample: "Facility Management London | Hard & Soft FM | Brand",
+  },
 };
 const vof = (i: DiagnosisInput): VerticalProfile => VERTICALS[i.vertical ?? "med_spa"] ?? VERTICALS.med_spa;
 
@@ -91,7 +100,17 @@ const vof = (i: DiagnosisInput): VerticalProfile => VERTICALS[i.vertical ?? "med
 const SCHEMA_RX: Record<string, RegExp> = {
   med_spa: /LocalBusiness|MedicalBusiness|MedicalClinic|HealthAndBeauty|Dentist|Physician/i,
   marketing_agency: /Organization|ProfessionalService|LocalBusiness|Corporation|Agency/i,
+  facility_management: /Organization|ProfessionalService|LocalBusiness|Service|Corporation/i,
 };
+/** Map a free-text category / playbook string to a known vertical-profile key. */
+export function normalizeVertical(category?: string | null): string {
+  const c = (category ?? "").toLowerCase();
+  if (/facilit|\bfm\b|cleaning|maintenance|janitor|geb.?ude|hausmeister|building services/.test(c)) return "facility_management";
+  if (/agency|marketing|werbe|seo|digital|advertis|agentur/.test(c)) return "marketing_agency";
+  if (/med ?spa|clinic|aesthetic|derma|cosmetic|surg|dental|klinik|beauty|wellness|health/.test(c)) return "med_spa";
+  return "med_spa";
+}
+
 export function hasBusinessSchema(schemaTypes: string[] | undefined, vertical = "med_spa"): boolean {
   const rx = SCHEMA_RX[vertical] ?? SCHEMA_RX.med_spa;
   return rx.test((schemaTypes ?? []).join(" "));

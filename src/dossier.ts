@@ -10,6 +10,10 @@ export interface DossierContact {
   name: string;
   role: string;
   email?: string | null;
+  /** How the email was obtained — published | apollo_verified | apollo_likely | valid_domain_guess | not_found.
+   *  Anything other than published/apollo_verified is NOT a confirmed mailbox. */
+  emailStatus?: string | null;
+  emailCandidates?: string[];
   phone?: string | null;
   linkedin?: string | null;
   linkedinVerified?: boolean;
@@ -307,8 +311,8 @@ export function renderDossier(d: Dossier): string {
 export const DOSSIER_COLUMNS = [
   "name", "domain", "category", "geo", "google_rating", "google_reviews", "positioning", "usp", "services",
   "business_email", "second_email", "business_phone", "whatsapp", "instagram", "booking_link",
-  "founder_name", "founder_role", "founder_email", "founder_phone", "founder_linkedin", "founder_linkedin_verified",
-  "dm2_name", "dm2_role", "dm2_email", "dm2_phone", "dm2_linkedin", "dm2_verified", "other_decision_makers",
+  "founder_name", "founder_role", "founder_email", "founder_email_status", "founder_phone", "founder_linkedin", "founder_linkedin_verified",
+  "dm2_name", "dm2_role", "dm2_email", "dm2_email_status", "dm2_phone", "dm2_linkedin", "dm2_verified", "other_decision_makers",
   "audit_title", "meta_desc_len", "h1_count", "h2_count", "schema_types",
   "has_localbusiness", "has_person", "has_faq", "has_aggregaterating",
   "hreflang", "rendered_words", "images", "images_no_alt", "has_whatsapp", "has_whatsapp_bot", "has_chatbot",
@@ -342,9 +346,13 @@ export function flattenDossier(d: Dossier): Record<string, string> {
     positioning: d.positioning, usp: d.usp, services: d.services.join(" | "),
     business_email: c.businessEmail ?? "", second_email: c.secondEmail ?? "", business_phone: c.businessPhone ?? "",
     whatsapp: c.whatsapp ?? "", instagram: c.instagram ?? "", booking_link: c.bookingLink ?? "",
-    founder_name: f?.name ?? "", founder_role: f?.role ?? "", founder_email: f?.email ?? "", founder_phone: f?.phone ?? "",
+    founder_name: f?.name ?? "", founder_role: f?.role ?? "", founder_email: f?.email ?? "",
+    founder_email_status: f?.emailStatus ?? (f?.email ? "unverified" : ""),
+    founder_phone: f?.phone ?? "",
     founder_linkedin: f?.linkedin ?? "", founder_linkedin_verified: f?.linkedin ? yn(f.linkedinVerified) : "",
-    dm2_name: dm2?.name ?? "", dm2_role: dm2?.role ?? "", dm2_email: dm2?.email ?? "", dm2_phone: dm2?.phone ?? "",
+    dm2_name: dm2?.name ?? "", dm2_role: dm2?.role ?? "", dm2_email: dm2?.email ?? "",
+    dm2_email_status: dm2?.emailStatus ?? (dm2?.email ? "unverified" : ""),
+    dm2_phone: dm2?.phone ?? "",
     dm2_linkedin: dm2?.linkedin ?? "", dm2_verified: dm2?.linkedin ? yn(dm2.linkedinVerified) : "",
     other_decision_makers: (c.others ?? []).map((o) => `${o.name} (${o.role})`).join("; "),
     audit_title: a.title ?? "", meta_desc_len: a.metaDescLen?.toString() ?? "",
@@ -423,4 +431,15 @@ export function dossierToCsv(ds: Dossier[]): string {
     return DOSSIER_COLUMNS.map((col) => cell(r[col] ?? "")).join(",");
   });
   return [header, ...rows].join("\n");
+}
+
+/** Same data as dossierToCsv but as string arrays — for xlsx / other serializers. */
+export function dossierToRows(ds: Dossier[]): { headers: string[]; rows: string[][] } {
+  return {
+    headers: [...DOSSIER_COLUMNS],
+    rows: ds.map((d) => {
+      const r = flattenDossier(d);
+      return DOSSIER_COLUMNS.map((col) => String(r[col] ?? ""));
+    }),
+  };
 }

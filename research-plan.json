@@ -1,19 +1,80 @@
 {
   "sellerPersona": "ai_search_visibility",
-  "prospectVertical": "project_developers",
+  "prospectVertical": "med_spas",
   "region": "Berlin, Germany",
   "researchSources": [
     {
-      "type": "google_search",
+      "type": "semrush_ai",
       "enabled": true,
       "pinned": false,
-      "signals": []
+      "signals": [
+        {
+          "key": "ai_mentions",
+          "meaning": "how often AI engines mention them",
+          "painThreshold": "pain if < 30",
+          "pitchWeight": 8
+        },
+        {
+          "key": "ai_delta_vs_leader",
+          "meaning": "gap vs the category AI leader",
+          "painThreshold": "pain if leader > 2x",
+          "pitchWeight": 9
+        },
+        {
+          "key": "cited_pages",
+          "meaning": "pages AI quotes from them",
+          "painThreshold": "pain if few",
+          "pitchWeight": 6
+        },
+        {
+          "key": "organic_traffic",
+          "meaning": "traffic they're leaking if conversion is weak",
+          "pitchWeight": 5
+        }
+      ]
     },
     {
-      "type": "website",
+      "type": "onpage_audit",
       "enabled": true,
       "pinned": false,
-      "signals": []
+      "signals": [
+        {
+          "key": "missing_schema",
+          "meaning": "no LocalBusiness/Person/FAQ markup",
+          "painThreshold": "pain if missing",
+          "pitchWeight": 8
+        },
+        {
+          "key": "rendered_words",
+          "meaning": "thin content AI can't cite",
+          "painThreshold": "pain if < 300",
+          "pitchWeight": 4
+        },
+        {
+          "key": "has_booking_link",
+          "meaning": "can a visitor book/convert in one click",
+          "painThreshold": "pain if absent",
+          "pitchWeight": 8
+        },
+        {
+          "key": "has_clear_cta",
+          "meaning": "a clear primary call-to-action above the fold",
+          "painThreshold": "pain if weak/absent",
+          "pitchWeight": 7
+        },
+        {
+          "key": "has_lead_capture",
+          "meaning": "form / chat / WhatsApp to capture a lead",
+          "painThreshold": "pain if none",
+          "pitchWeight": 7
+        },
+        {
+          "key": "shows_reviews",
+          "meaning": "social proof on-site (rating/testimonials)",
+          "painThreshold": "pain if hidden",
+          "pitchWeight": 5
+        }
+      ]
     },
     {
       "type": "google_maps",
@@ -22,15 +83,34 @@
       "signals": [
         {
           "key": "google_rating",
-          "meaning": "social proof",
+          "meaning": "social proof + the reputation they're not converting",
           "pitchWeight": 3
         },
         {
           "key": "review_count",
-          "meaning": "scale / established",
+          "meaning": "scale / established / earned traffic to convert",
           "pitchWeight": 4
         }
       ]
+    },
+    {
+      "type": "pagespeed",
+      "enabled": true,
+      "pinned": false,
+      "signals": [
+        {
+          "key": "performance_score",
+          "meaning": "slow pages bleed conversions",
+          "painThreshold": "pain if < 50",
+          "pitchWeight": 6
+        }
+      ]
+    },
+    {
+      "type": "linkedin_company",
+      "enabled": true,
+      "pinned": false,
+      "signals": []
     }
   ],
   "contactSource": {
@@ -70,7 +150,7 @@
     },
     {
       "key": "organic_traffic",
-      "label": "scale / budget proxy",
+      "label": "traffic they're leaking if conversion is weak",
       "group": "capacity",
       "fromSignal": "organic_traffic"
     },
@@ -87,14 +167,44 @@
       "fromSignal": "rendered_words"
     },
     {
+      "key": "has_booking_link",
+      "label": "can a visitor book/convert in one click",
+      "group": "pain",
+      "fromSignal": "has_booking_link"
+    },
+    {
+      "key": "has_clear_cta",
+      "label": "a clear primary call-to-action above the fold",
+      "group": "pain",
+      "fromSignal": "has_clear_cta"
+    },
+    {
+      "key": "has_lead_capture",
+      "label": "form / chat / WhatsApp to capture a lead",
+      "group": "pain",
+      "fromSignal": "has_lead_capture"
+    },
+    {
+      "key": "shows_reviews",
+      "label": "social proof on-site (rating/testimonials)",
+      "group": "pain",
+      "fromSignal": "shows_reviews"
+    },
+    {
+      "key": "performance_score",
+      "label": "slow pages bleed conversions",
+      "group": "pain",
+      "fromSignal": "performance_score"
+    },
+    {
       "key": "google_rating",
-      "label": "social proof",
+      "label": "social proof + the reputation they're not converting",
       "group": "capacity",
       "fromSignal": "google_rating"
     },
     {
       "key": "review_count",
-      "label": "scale / established",
+      "label": "scale / established / earned traffic to convert",
       "group": "capacity",
       "fromSignal": "review_count"
     },
@@ -125,15 +235,16 @@
   ],
   "scaffoldedByAi": true,
   "editedByUser": true,
-  "icp": "Investors, municipalities, energy developers in Europe & Central Asia seeking a single integrated EPC partner for solar/wind/BESS projects",
+  "icp": "Healthcare & wellness businesses (med spas, clinics, dental, aesthetics) with inbound demand (WhatsApp/social) but invisible in AI search and leaking unqualified/unbooked leads — strong fit for MENA / Turkey / multilingual markets",
   "customerTypes": [
-    "institutional investors",
-    "municipalities",
-    "industrial energy buyers",
-    "project developers",
-    "technology partners"
+    "med spas",
+    "cosmetic clinics",
+    "dental clinics",
+    "aesthetic clinics",
+    "wellness centers",
+    "private healthcare practices"
   ],
-  "competitorHint": "EPC renewable energy Germany — Belectric, Enerparc, IBC Solar, BayWa r.e.",
+  "competitorHint": "healthcare lead-management + AEO — WhatsApp business platforms, clinic CRMs, AI-search/GEO agencies",
   "contactChannels": [
     {
       "key": "founder_linkedin",
@@ -173,7 +284,7 @@
     },
     {
       "key": "dm2_email",
-      "required": false
+      "required": true
     }
   ],
   "requiredContacts": [
@@ -184,36 +295,38 @@
     "business_phone",
     "instagram",
     "whatsapp",
-    "founder_phone"
+    "founder_phone",
+    "dm2_email"
   ],
   "wedge": {
-    "wedge": "A renewable project announced or in planning but with NO integrated EPC partner — exposed to delays and cost overruns from juggling separate vendors",
+    "wedge": "A renewable project announced or in planning but with NO integrated EPC partner — exposed to delays and cost overruns",
     "sources": [
       "google_search",
       "website",
       "google_maps"
     ],
-    "reasoning": "EPC is project-timing-based; the wedge is an announced project lacking an integrated partner, provable via Google + the prospect site — all LIGHT sources",
+    "reasoning": "EPC project-timing wedge",
     "confidence": 0.78,
-    "pitchFormula": "You announced {project} ({capacity}) — fragmented EPC delivery typically adds ~{cost}% to budget and {months} months of delay. One integrated partner removes that interface risk.",
+    "sourceTier": "light",
+    "pitchFormula": "You announced {project} ({capacity}) — fragmented EPC adds ~{cost}% + {months} months. One integrated partner removes that.",
     "provingSignals": [
       {
         "signal": "announced_project",
         "source": "google_search",
-        "meaning": "a public solar/wind/BESS project the prospect is pursuing",
-        "threshold": "announcement or tender in the last 18 months"
+        "meaning": "public solar/wind/BESS project",
+        "threshold": "announcement in last 18mo"
       },
       {
         "signal": "no_named_epc",
         "source": "website",
-        "meaning": "no integrated EPC partner named",
-        "threshold": "no EPC partner on site/press"
+        "meaning": "no integrated EPC partner",
+        "threshold": "none on site/press"
       },
       {
         "signal": "pre_construction_stage",
         "source": "google_search",
-        "meaning": "timing — reach before construction starts",
-        "threshold": "in planning/permitting, not built"
+        "meaning": "timing",
+        "threshold": "in planning/permitting"
       }
     ]
   }

@@ -32,10 +32,8 @@ export function emailCandidates(fullName: string, domain: string): string[] {
   return [...pats];
 }
 
-export interface CompletedContact extends DossierContact {
-  emailCandidates?: string[];
-  emailStatus?: string;
-}
+// emailCandidates + emailStatus are now part of DossierContact.
+export type CompletedContact = DossierContact;
 
 /**
  * Repeatable contact completer — fills a contact's missing LinkedIn + email.
@@ -58,16 +56,25 @@ export async function completeContact(
     if (li) { out.linkedin = li.url; out.linkedinVerified = false; }
   }
 
-  // 2. Email — derive patterns + verify the domain accepts mail
-  if (!out.email && contact.name && domain) {
+  // 2. Email — prefer an already-captured address (published on-site, or Apollo-verified
+  //    passed in via contact.email/emailStatus). Only as a LAST resort derive a pattern,
+  //    and when we do, label it `valid_domain_guess` so it is never mistaken for a real
+  //    mailbox. The accurate path (mailbox-confirmed) is Apollo, done in the browser.
+  if (out.email) {
+    // Keep an explicit status if the caller already set one (published / apollo_verified).
+    if (!out.emailStatus) {
+      out.emailStatus = (await verifyEmail(out.email)) === "valid_domain" ? "valid_domain" : "unverified";
+    }
+  } else if (contact.name && domain) {
     const candidates = emailCandidates(contact.name, domain);
     out.emailCandidates = candidates;
-    out.emailStatus = candidates.length ? await verifyEmail(candidates[0]) : "unverified";
-    if (out.emailStatus === "valid_domain" && candidates.length) {
-      out.email = candidates[0]; // best-guess pattern on a mail-accepting domain
+    const domainOk = candidates.length ? await verifyEmail(candidates[0]) : "unverified";
+    if (domainOk === "valid_domain" && candidates.length) {
+      out.email = candidates[0];
+      out.emailStatus = "valid_domain_guess"; // pattern only; domain accepts mail, mailbox NOT confirmed
+    } else {
+      out.emailStatus = "not_found";
     }
-  } else if (out.email) {
-    out.emailStatus = await verifyEmail(out.email);
   }
 
   return out;
