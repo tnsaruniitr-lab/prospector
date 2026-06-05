@@ -50,6 +50,7 @@ export const UNIVERSAL_CORE: ColumnSpec[] = [
 // Curated full diagnostic sets per validated persona — your AEO richness, retained.
 export const CURATED_DIAGNOSTIC: Record<string, ColumnSpec[]> = {
   ai_search_visibility: [
+    // — Visibility wedge —
     { key: "authority_score", label: "Authority", group: "diagnostic" },
     { key: "organic_traffic", label: "Organic traffic", group: "diagnostic" },
     { key: "traffic_trend", label: "Traffic trend", group: "diagnostic" },
@@ -64,7 +65,15 @@ export const CURATED_DIAGNOSTIC: Record<string, ColumnSpec[]> = {
     { key: "strongest_ai_competitor", label: "Top competitor", group: "diagnostic" },
     { key: "has_localbusiness_schema", label: "LocalBusiness schema", group: "diagnostic" },
     { key: "has_faq_schema", label: "FAQ schema", group: "diagnostic" },
-    { key: "top_3_ai_problems", label: "Top problems", group: "diagnostic" },
+    // — Lead-conversion wedge —
+    { key: "has_booking_link", label: "Booking link", group: "diagnostic" },
+    { key: "has_clear_cta", label: "Clear CTA", group: "diagnostic" },
+    { key: "has_lead_capture", label: "Lead capture", group: "diagnostic" },
+    { key: "shows_reviews", label: "Shows reviews", group: "diagnostic" },
+    { key: "performance_score", label: "Page speed", group: "diagnostic" },
+    { key: "conversion_gap", label: "Conversion gap", group: "diagnostic" },
+    // — Pitch —
+    { key: "top_3_problems", label: "Top problems", group: "diagnostic" },
     { key: "top_3_fixes", label: "Top fixes", group: "diagnostic" },
   ],
 };

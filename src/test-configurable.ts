@@ -166,12 +166,12 @@ section("Phase 2 — Plan-aware gate");
     !gBad.complete && gBad.missing.some(m => m.includes("semrush_ai")), gBad.missing.join(","));
 
   // Noted absence (thin) accepted — golden rule
-  const noted = { audit: { schemaTypes: ["WebSite"] }, competitive: { thin: true }, googleRating: 4.8, contacts: { founder: { name: "x" } } };
+  const noted = { audit: { schemaTypes: ["WebSite"], pagespeed: { performance_score: 40 } }, competitive: { thin: true }, googleRating: 4.8, contacts: { founder: { name: "x" } } };
   check("T3.3 noted absence (competitive.thin) accepted (golden rule)",
     checkPlanComplete(noted, aiPlan).complete);
 
   // Contact: missing+no note → fail; explicit note → pass
-  const noContact = { audit: { schemaTypes: ["x"] }, competitive: { thin: true }, googleRating: 4.8, contacts: null };
+  const noContact = { audit: { schemaTypes: ["x"], pagespeed: { performance_score: 40 } }, competitive: { thin: true }, googleRating: 4.8, contacts: null };
   check("T3.4 enabled contact missing + no note → gate FAILS", !checkPlanComplete(noContact, aiPlan).complete);
   const notedContact = { ...noContact, contacts: { ownerNotPublicNote: "no public owner" } };
   check("T3.5 explicit 'owner not public' note → gate PASSES", checkPlanComplete(notedContact, aiPlan).complete);

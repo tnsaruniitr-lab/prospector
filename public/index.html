@@ -770,15 +770,9 @@ function app() {
         taskId: this.taskId,
       };
 
-      // Path A: agent connected via WebSocket bridge → direct (headless CLI path)
-      if (this.agentConnected && this.ws?.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify({ type: "research", agentToken: this.agentToken, ...payload }));
-        this.log.push("📡 Sent to your connected agent…");
-        return;
-      }
-
-      // Path B: queue for local Claude (Monitor watches → I handle it in the chat)
-      // Works when the agent isn't connected but this chat is open.
+      // Route research through the QUEUE so the conversational Claude (via the
+      // Monitor) handles it. The agent-spawn path needs a `claude` CLI on PATH,
+      // which the desktop-app setup doesn't have — the queue path always works.
       try {
         const r = await fetch(`${SERVER}/api/request`, {
           method: "POST", headers: { "content-type": "application/json" },

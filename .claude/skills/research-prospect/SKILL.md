@@ -50,6 +50,20 @@ dossier must include both browser passes:
 `recordDossier()` enforces this through `src/research-gate.ts`; failed gates must
 be completed, not worked around.
 
+## Flagship playbook — AI-search visibility + lead conversion (persona `ai_search_visibility`)
+
+This curated playbook diagnoses **two wedges** and pitches the sharper one:
+- **Visibility wedge:** `ai_mentions`, `ai_delta_vs_leader`, `cited_pages`, `missing_schema`
+  → *"{leader} gets {delta}× more AI mentions than {prospect} ({lm} vs {pm})"*
+- **Lead-conversion wedge** (capture the traffic they earn): from the on-page audit +
+  PageSpeed — `has_booking_link`, `has_clear_cta`, `has_lead_capture` (form/chat/WhatsApp),
+  `shows_reviews`, `performance_score`. Set `conversion_gap` = which of these are missing.
+  → *"You have {reviews} reviews + {traffic} visits but no {missing} — you're leaking the
+  buyers you've earned."*
+
+Draft BOTH, lead with the sharper per prospect; record both in the dossier. The combined
+hook: *"invisible where buyers now search (AI) AND not converting the visitors you get."*
+
 ## Input
 A domain (e.g. `altaderma.com`), optionally a business name + city.
 

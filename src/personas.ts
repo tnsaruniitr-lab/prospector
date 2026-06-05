@@ -59,29 +59,38 @@ export interface SellerPersona {
 // ── The library ─────────────────────────────────────────────────────────────
 
 export const PERSONAS: Record<string, SellerPersona> = {
-  // 1) Your use case — AEO / AI-search visibility
+  // 1) Your use case — AI-search visibility + lead conversion (dual wedge)
   ai_search_visibility: {
     id: "ai_search_visibility",
-    name: "AI-search visibility (AEO)",
-    offer: "Getting cited by ChatGPT, Gemini & AI Overviews",
-    valueProp: "convert an established reputation into AI-search visibility",
+    name: "AI-search visibility + lead conversion",
+    offer: "Get found in AI search (ChatGPT/Gemini/AI Overviews) AND convert the visitors you earn",
+    valueProp: "turn an established reputation into AI-search visibility AND captured leads",
     painArchetype: "ai_invisibility",
-    defaultResearchSources: ["semrush_ai", "onpage_audit", "google_maps"],
+    defaultResearchSources: ["semrush_ai", "onpage_audit", "google_maps", "pagespeed"],
     defaultContactSource: "linkedin",
     signalMap: {
       semrush_ai: [
         { key: "ai_mentions", meaning: "how often AI engines mention them", painThreshold: "pain if < 30", pitchWeight: 8 },
         { key: "ai_delta_vs_leader", meaning: "gap vs the category AI leader", painThreshold: "pain if leader > 2x", pitchWeight: 9 },
         { key: "cited_pages", meaning: "pages AI quotes from them", painThreshold: "pain if few", pitchWeight: 6 },
-        { key: "organic_traffic", meaning: "scale / budget proxy", pitchWeight: 4 },
+        { key: "organic_traffic", meaning: "traffic they're leaking if conversion is weak", pitchWeight: 5 },
       ],
       onpage_audit: [
+        // Visibility signals
         { key: "missing_schema", meaning: "no LocalBusiness/Person/FAQ markup", painThreshold: "pain if missing", pitchWeight: 8 },
-        { key: "rendered_words", meaning: "thin content AI can't cite", painThreshold: "pain if < 300", pitchWeight: 5 },
+        { key: "rendered_words", meaning: "thin content AI can't cite", painThreshold: "pain if < 300", pitchWeight: 4 },
+        // Lead-conversion signals (the second wedge)
+        { key: "has_booking_link", meaning: "can a visitor book/convert in one click", painThreshold: "pain if absent", pitchWeight: 8 },
+        { key: "has_clear_cta", meaning: "a clear primary call-to-action above the fold", painThreshold: "pain if weak/absent", pitchWeight: 7 },
+        { key: "has_lead_capture", meaning: "form / chat / WhatsApp to capture a lead", painThreshold: "pain if none", pitchWeight: 7 },
+        { key: "shows_reviews", meaning: "social proof on-site (rating/testimonials)", painThreshold: "pain if hidden", pitchWeight: 5 },
+      ],
+      pagespeed: [
+        { key: "performance_score", meaning: "slow pages bleed conversions", painThreshold: "pain if < 50", pitchWeight: 6 },
       ],
       google_maps: [
-        { key: "google_rating", meaning: "social proof", pitchWeight: 3 },
-        { key: "review_count", meaning: "scale / established", pitchWeight: 4 },
+        { key: "google_rating", meaning: "social proof + the reputation they're not converting", pitchWeight: 3 },
+        { key: "review_count", meaning: "scale / established / earned traffic to convert", pitchWeight: 4 },
       ],
     },
     idealScale: { metric: "review_count", tooSmall: 10, idealLow: 40, idealHigh: 2000, tooBig: 50000 },

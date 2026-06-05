@@ -1,56 +1,19 @@
 {
   "sellerPersona": "ai_search_visibility",
-  "prospectVertical": "med_spa",
+  "prospectVertical": "project_developers",
   "region": "Berlin, Germany",
   "researchSources": [
     {
-      "type": "semrush_ai",
+      "type": "google_search",
       "enabled": true,
       "pinned": false,
-      "signals": [
-        {
-          "key": "ai_mentions",
-          "meaning": "how often AI engines mention them",
-          "painThreshold": "pain if < 30",
-          "pitchWeight": 8
-        },
-        {
-          "key": "ai_delta_vs_leader",
-          "meaning": "gap vs the category AI leader",
-          "painThreshold": "pain if leader > 2x",
-          "pitchWeight": 9
-        },
-        {
-          "key": "cited_pages",
-          "meaning": "pages AI quotes from them",
-          "painThreshold": "pain if few",
-          "pitchWeight": 6
-        },
-        {
-          "key": "organic_traffic",
-          "meaning": "scale / budget proxy",
-          "pitchWeight": 4
-        }
-      ]
+      "signals": []
     },
     {
-      "type": "onpage_audit",
+      "type": "website",
       "enabled": true,
       "pinned": false,
-      "signals": [
-        {
-          "key": "missing_schema",
-          "meaning": "no LocalBusiness/Person/FAQ markup",
-          "painThreshold": "pain if missing",
-          "pitchWeight": 8
-        },
-        {
-          "key": "rendered_words",
-          "meaning": "thin content AI can't cite",
-          "painThreshold": "pain if < 300",
-          "pitchWeight": 5
-        }
-      ]
+      "signals": []
     },
     {
       "type": "google_maps",
@@ -161,5 +124,97 @@
     }
   ],
   "scaffoldedByAi": true,
-  "editedByUser": true
+  "editedByUser": true,
+  "icp": "Investors, municipalities, energy developers in Europe & Central Asia seeking a single integrated EPC partner for solar/wind/BESS projects",
+  "customerTypes": [
+    "institutional investors",
+    "municipalities",
+    "industrial energy buyers",
+    "project developers",
+    "technology partners"
+  ],
+  "competitorHint": "EPC renewable energy Germany — Belectric, Enerparc, IBC Solar, BayWa r.e.",
+  "contactChannels": [
+    {
+      "key": "founder_linkedin",
+      "required": true
+    },
+    {
+      "key": "founder_email",
+      "required": true
+    },
+    {
+      "key": "dm2",
+      "required": true
+    },
+    {
+      "key": "business_email",
+      "required": true
+    },
+    {
+      "key": "business_phone",
+      "required": true
+    },
+    {
+      "key": "instagram",
+      "required": true
+    },
+    {
+      "key": "whatsapp",
+      "required": true
+    },
+    {
+      "key": "booking_link",
+      "required": false
+    },
+    {
+      "key": "founder_phone",
+      "required": true
+    },
+    {
+      "key": "dm2_email",
+      "required": false
+    }
+  ],
+  "requiredContacts": [
+    "founder_linkedin",
+    "founder_email",
+    "dm2",
+    "business_email",
+    "business_phone",
+    "instagram",
+    "whatsapp",
+    "founder_phone"
+  ],
+  "wedge": {
+    "wedge": "A renewable project announced or in planning but with NO integrated EPC partner — exposed to delays and cost overruns from juggling separate vendors",
+    "sources": [
+      "google_search",
+      "website",
+      "google_maps"
+    ],
+    "reasoning": "EPC is project-timing-based; the wedge is an announced project lacking an integrated partner, provable via Google + the prospect site — all LIGHT sources",
+    "confidence": 0.78,
+    "pitchFormula": "You announced {project} ({capacity}) — fragmented EPC delivery typically adds ~{cost}% to budget and {months} months of delay. One integrated partner removes that interface risk.",
+    "provingSignals": [
+      {
+        "signal": "announced_project",
+        "source": "google_search",
+        "meaning": "a public solar/wind/BESS project the prospect is pursuing",
+        "threshold": "announcement or tender in the last 18 months"
+      },
+      {
+        "signal": "no_named_epc",
+        "source": "website",
+        "meaning": "no integrated EPC partner named",
+        "threshold": "no EPC partner on site/press"
+      },
+      {
+        "signal": "pre_construction_stage",
+        "source": "google_search",
+        "meaning": "timing — reach before construction starts",
+        "threshold": "in planning/permitting, not built"
+      }
+    ]
+  }
 }
