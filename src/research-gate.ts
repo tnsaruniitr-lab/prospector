@@ -73,6 +73,27 @@ export function deepResearchGateIssues(d: Dossier): string[] {
     issues.push("missing 2nd decision-maker: add a second named/verified contact (run the LinkedIn company People page), or an explicit 'only founder/owner public' note");
   }
 
+  // ── CORRECTNESS checks (not just presence) ─────────────────────────────────
+  // 1) A "verified" LinkedIn must carry company-confirming evidence in `source`
+  //    (the company name, or the word confirmed/verified) — stops over-claiming.
+  const companyToken = (d.name || "").toLowerCase().split(/\s+/).filter((w) => w.length >= 4)[0] || "";
+  for (const p of people(d)) {
+    if (p.linkedinVerified && filled(p.linkedin)) {
+      const src = (p.source || "").toLowerCase();
+      const confirmed = /confirm|verified|impressum|handelsregister/.test(src) || (companyToken && src.includes(companyToken));
+      if (!confirmed) {
+        issues.push(`correctness: ${p.name} is linkedinVerified=true but source shows no company-confirming evidence — set verified=false or confirm the profile names "${d.name}"`);
+      }
+    }
+  }
+  // 2) A categoryAiLeader claim needs ≥2 AI-checked competitors (rigor), or an
+  //    explicit "category thin/wide-open" note — stops declaring a leader off one check.
+  const aiCompChecked = cv.aiCompetitors?.length ?? 0;
+  const categoryThin = /thin|wide open|wide-open|near-?(empty|absent)|category (is )?(empty|absent)|few competitors|nobody (is )?visible/.test(notes);
+  if (cv.categoryAiLeader && aiCompChecked < 2 && !categoryThin) {
+    issues.push("correctness: categoryAiLeader claim under-evidenced — AI-check ≥2 competitors (aiCompetitors) or add an explicit 'category thin/wide-open' note");
+  }
+
   return issues;
 }
 

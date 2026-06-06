@@ -16,7 +16,7 @@
  * are all present.
  */
 import { readFileSync } from "node:fs";
-import { normalizeVertical } from "./synthesis.js";
+import { normalizeVertical, synthesizeDiagnosis, hasBusinessSchema } from "./synthesis.js";
 import { getPersona } from "./personas.js";
 import { inferSemrushDatabase } from "./semrush.js";
 import { deepResearchGateIssues } from "./research-gate.js";
@@ -113,7 +113,43 @@ export function renderPlan(p: RunPlan): string {
   ].join("\n");
 }
 
-export async function finalizeProspect(d: Dossier): Promise<{ ok: boolean; issues: string[]; id?: string }> {
+function num(v: unknown): number | null {
+  if (v == null || v === "") return null;
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  const m = String(v).replace(/,/g, "").match(/([0-9.]+)\s*([kmb])?/i);
+  if (!m) return null;
+  const mult = ({ k: 1e3, m: 1e6, b: 1e9 } as Record<string, number>)[(m[2] ?? "").toLowerCase()] ?? 1;
+  return parseFloat(m[1]) * mult;
+}
+
+/** Regenerate the pitch fields from the captured signals via the deterministic
+ *  rules engine — so problems/fixes/hook/subject/weakPoints are code-derived,
+ *  not free text the agent typed. Leaves `pitch`/`priorityNote` (narrative) as-is. */
+export function recomputeSynthesis(d: Dossier): void {
+  const a = d.audit, c = d.competitive, ai = c.aiVisibility ?? {};
+  const vertical = normalizeVertical(d.category);
+  const leader = c.categoryAiLeader;
+  const f = d.contacts?.founder;
+  const s = synthesizeDiagnosis({
+    name: d.name, category: d.category, geo: d.geo, vertical,
+    starAsset: f?.name ? `${f.role ?? "The founder"} ${f.name}` : null,
+    hasLocalBusiness: hasBusinessSchema(a.schemaTypes, vertical),
+    hasPerson: !!a.hasPerson, hasFAQ: !!a.hasFAQ, hasAggregateRating: !!a.hasAggregateRating,
+    renderedWords: a.renderedWords ?? null, images: a.images ?? null, imagesNoAlt: a.imagesNoAlt ?? null,
+    titleLen: a.title ? a.title.length : null, metaDescLen: a.metaDescLen ?? null, h1Count: a.h1Count ?? null,
+    authorityScore: num(c.authorityScore), aiMentions: num(ai.mentions), citedPages: num(ai.citedPages),
+    trafficTrend: c.trafficTrend ?? null,
+    categoryLeader: leader ? { domain: leader.domain, mentions: num(leader.mentions) ?? 0, citedPages: num(leader.citedPages) ?? undefined } : null,
+  });
+  d.topAiProblems = s.problems;
+  d.topFixes = s.fixes;
+  d.hook = s.hook;
+  d.weakPoints = s.weakPoints;
+  if (s.subjectHeadline) d.subjectHeadline = s.subjectHeadline;
+}
+
+export async function finalizeProspect(d: Dossier, opts: { recompute?: boolean } = {}): Promise<{ ok: boolean; issues: string[]; id?: string }> {
+  if (opts.recompute !== false) recomputeSynthesis(d); // deterministic synthesis
   const issues = deepResearchGateIssues(d);
   if (issues.length) return { ok: false, issues };
   const id = await recordDossier(d); // gated again inside; persists to STORAGE target
