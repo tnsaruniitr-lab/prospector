@@ -21,7 +21,12 @@ directly, use the repo root. If installed as a plugin, use the plugin path.
 Watch for new queue entries every 3 seconds. When a new pending entry appears:
 - **type: "infer"** → Read the `payload.url`, scrape it (fetch the homepage), understand what the business sells broadly (not limited to 4 presets — any business), extract: personaId (or null), vertical, offer, painYouFix, fixes, services, customerTypes, icp, competitorHint, suggestedSources, confidence, reasoning, title. Write result with `npx tsx src/queue.ts done <id> '<json>'`
 - **type: "wedge"** → Read `payload.brand` (offer, value_prop, fixes, icp, customer_types). Find the seller's sharpest MEASURABLE wedge (the pain provable with a number). Prefer the LIGHTEST sources (google_search, website, onpage_audit, google_reviews, google_maps, pagespeed) over HEAVY ones (semrush_ai, semrush_seo, linkedin_company, apollo_browser) — only use heavy if the wedge truly needs it. Output `{wedge, provingSignals:[{signal,meaning,threshold,source}], sources, pitchFormula, confidence, reasoning}`. Write with `npx tsx src/queue.ts done <id> '<json>'`. (Same logic as `src/wedge.ts buildWedgePrompt`.)
-- **type: "research"** → Run the full research-prospect flow: Maps discovery → on-page audit → SEMrush → LinkedIn → synthesize → persist to Railway DB. Write a summary result when done.
+- **type: "research"** (also when the user simply says "research \<business type\> in \<city\>") → Use the **deterministic orchestrator**, do NOT improvise:
+  1. `npx tsx src/research-run.ts plan "<category>" "<city>" <count>` → prints the fixed recipe (vertical, SEMrush db, Maps URL, per-prospect steps, gate-enforced definition of done).
+  2. Execute that recipe **injecting the codified extractors** (`src/browser/maps-extract.js`, `audit.js`, `semrush-extract.js`, `semrush-competitors.js`, `linkedin-people.js`) — **never write ad-hoc extraction JS**; that is what caused field-by-field variance.
+  3. Persist each prospect with `npx tsx src/research-run.ts finalize <dossier.json>` (or `recordDossier`) — **never `saveProspect` directly**. This runs the GATE (`assertDeepResearchComplete`): SEMrush + competitive + LinkedIn + 2nd decision-maker (or explicit not-public note) are all REQUIRED. If it blocks, fill the named gap and re-run — do not bypass.
+  4. After the batch: `npx tsx src/db-export.ts` → refreshes `prospect-dossier-from-db-final.csv` + `.xlsx`.
+  The only human-in-the-loop points are: approve the candidate list, and resolve ambiguous founders. Everything else is gate-enforced and deterministic.
 
 Never fabricate. If a value isn't found, set it to null or an honest note.
 

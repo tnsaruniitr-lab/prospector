@@ -5,6 +5,14 @@ description: Deep-research one prospect domain into a dossier. Runs a FIXED flow
 
 # Research a prospect → dossier
 
+## ⮕ Canonical entry — the deterministic orchestrator (use this for "research \<type\> in \<city\>")
+For a whole run (business type + city → N dossiers), do NOT improvise the flow:
+1. `npx tsx src/research-run.ts plan "<category>" "<city>" <count>` — prints the fixed recipe (vertical, SEMrush db, Maps URL, per-prospect steps, gate-enforced definition of done).
+2. Execute it **injecting the codified extractors below** (never ad-hoc JS).
+3. Persist each prospect via `npx tsx src/research-run.ts finalize <dossier.json>` (gated) — **never `saveProspect` directly**.
+The stages below are the per-prospect procedure the orchestrator runs; the gate
+(`src/research-gate.ts`) is the hard definition of done.
+
 ## Code references
 Extractors: `src/browser/*.js` | Synthesis: `src/synthesis.ts` | Grading: `src/grading.ts`
 Relevance: `src/relevance-v2.ts` | Storage: `src/storage.ts` | Persist: `src/record-dossier.ts`
